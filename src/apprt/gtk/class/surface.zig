@@ -1598,6 +1598,13 @@ pub const Surface = extern struct {
         return self.private().cursor_pos;
     }
 
+    /// Return a master_fd to adopt for this surface's pty if one was
+    /// stashed on Application (e.g. ptyxis-agent container spawn). One
+    /// shot — the stash is cleared on read.
+    pub fn externalMasterFd(_: *Self) ?c_int {
+        return Application.default().takePendingExternalMasterFd();
+    }
+
     pub fn defaultTermioEnv(self: *Self) !std.process.Environ.Map {
         const app = Application.default();
         const alloc = app.allocator();

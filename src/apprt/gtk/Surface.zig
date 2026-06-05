@@ -99,6 +99,10 @@ pub fn defaultTermioEnv(self: *Self) !std.process.Environ.Map {
     return try self.surface.defaultTermioEnv();
 }
 
+pub fn externalMasterFd(self: *Self) ?c_int {
+    return self.surface.externalMasterFd();
+}
+
 /// Redraw the inspector for our surface.
 pub fn redrawInspector(self: *Self) void {
     self.surface.redrawInspector();

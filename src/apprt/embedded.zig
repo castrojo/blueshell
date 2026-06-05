@@ -1210,6 +1210,10 @@ pub const Surface = struct {
         };
     }
 
+    pub fn externalMasterFd(_: *const Surface) ?c_int {
+        return null;
+    }
+
     pub fn defaultTermioEnv(self: *const Surface) !std.process.Environ.Map {
         _ = self;
         var env = try global.environMap();
