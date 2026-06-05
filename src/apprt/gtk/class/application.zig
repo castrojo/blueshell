@@ -45,6 +45,7 @@ const CloseConfirmationDialog = @import("close_confirmation_dialog.zig").CloseCo
 const ConfigErrorsDialog = @import("config_errors_dialog.zig").ConfigErrorsDialog;
 const ContainerClient = @import("container_client.zig").Client;
 const PtyxisContainer = @import("container_object.zig").Container;
+const PreferencesWindow = @import("preferences_window.zig").PreferencesWindow;
 
 comptime {
     _ = ContainerClient.spawn;
@@ -53,6 +54,8 @@ comptime {
     _ = ContainerClient.deinit;
     _ = PtyxisContainer.new;
     _ = PtyxisContainer.getGObjectType;
+    _ = PreferencesWindow.new;
+    _ = PreferencesWindow.getGObjectType;
 }
 const GlobalShortcuts = @import("global_shortcuts.zig").GlobalShortcuts;
 const OpenURI = @import("../portal.zig").OpenURI;
@@ -1427,6 +1430,13 @@ pub const Application = extern struct {
         // Spawn ptyxis-agent and cache the container model. Failure is
         // non-fatal — Host-only tabs still work without it.
         self.startupContainerClient();
+
+        // Optional: auto-open Preferences window for smoke testing
+        // (gated on env var, off by default).
+        if (std.posix.getenv("GHOSTTY_PTYXIS_TEST_PREFS")) |_| {
+            const window = PreferencesWindow.new();
+            window.as(gtk.Window).present();
+        }
     }
 
     fn startupContainerClient(self: *Self) void {
@@ -1580,6 +1590,7 @@ pub const Application = extern struct {
             .init("new-window-command", actionNewWindow, as_variant_type),
             .init("new-tab", actionNewTab, tas_variant_type),
             .init("open-config", actionOpenConfig, s_variant_type),
+            .init("preferences", actionPreferences, null),
             .init("present-surface", actionPresentSurface, t_variant_type),
             .init("quit", actionQuit, null),
             .init("reload-config", actionReloadConfig, null),
@@ -2087,6 +2098,15 @@ pub const Application = extern struct {
         };
 
         _ = self.core().mailbox.push(global.io(), .{ .open_config = target }, .forever);
+    }
+
+    pub fn actionPreferences(
+        _: *gio.SimpleAction,
+        _: ?*glib.Variant,
+        _: *Self,
+    ) callconv(.c) void {
+        const window = PreferencesWindow.new();
+        window.as(gtk.Window).present();
     }
 
     fn actionPresentSurface(
