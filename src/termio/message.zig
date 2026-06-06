@@ -103,6 +103,9 @@ pub const Message = union(enum) {
         alloc: Allocator,
         pw: []const u8,
     };
+    /// Restart the subprocess in-place. Sent by the main thread when
+    /// exit-action = restart after a child exits.
+    restart_subprocess: void,
 
     /// Return a write request for the given data. This will use
     /// write_small if it fits or write_alloc otherwise. This should NOT

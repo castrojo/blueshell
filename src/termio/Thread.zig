@@ -365,6 +365,12 @@ fn drainMailbox(
                     self.flags.linefeed_mode,
                 );
             },
+
+            .restart_subprocess => try io.backend.exec.restartSubprocess(
+                data.alloc,
+                io,
+                data,
+            ),
         }
     }
 
