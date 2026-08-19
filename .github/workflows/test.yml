@@ -1778,6 +1778,7 @@ jobs:
       - name: test
         run: nix develop -c zig build test --system ${{ steps.deps.outputs.deps }}
 
+
   test-i18n:
     strategy:
       fail-fast: false
