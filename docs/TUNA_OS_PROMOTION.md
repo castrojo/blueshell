@@ -171,9 +171,30 @@ Being installable is not the finish line — the app must be discoverable:
 - [x] BlueShell present in the remote index as `app/org.tunaos.BlueShell/{x86_64,aarch64}/master`
 - [x] README install section switched to the remote as the primary path (the rolling `tip` release is the "bleeding edge" alternative)
 - [x] `upstream-sync.yml` failure fixed — the `upstream-sync` label does not survive a repo transfer, and every weekly run since 2026-08-17 failed at `gh issue create --label upstream-sync`. Label recreated 2026-09-06.
-- [ ] Ghostty: first `publish-ghostty-flatpak` run green, `ghcr.io/tuna-os/ghostty` package made **public**, index entry confirmed
-- [ ] Fresh-machine install of both verified: `flatpak install tuna-os org.tunaos.BlueShell` and `flatpak install tuna-os com.mitchellh.ghostty`
-- [ ] tunaos.org site PR merged (section 4) — do this *after* the install check, since the pages present both commands as working
-- [ ] Both apps added to `tuna-os/docs:static/flatpak/expected-apps.json` with `archs: ["amd64", "arm64"]`. Deliberately last: `check-flatpak-remote.py` fails on an app listed there but absent from the index, so this turns a standing warning into a real check only once the entries exist.
-- [ ] `hanthor/blueshell` fork archived, its PR closed
+- [x] Ghostty: first `publish-ghostty-flatpak` run green (2026-09-06), index entry `app/com.mitchellh.ghostty/{x86_64,aarch64}/master` live. The GHCR package came out **public** on first push, so the manual visibility flip this document warned about was not needed — worth re-checking rather than assuming for the next app.
+- [x] Install of both verified from the live remote: `flatpak install tuna-os com.mitchellh.ghostty` deploys `app/com.mitchellh.ghostty/x86_64/master` from origin `tuna-os` and runs (Ghostty 1.3.2-main).
+- [x] tunaos.org site PR merged — tuna-os/docs#373, both apps listed in all six places.
+- [x] Both apps added to `tuna-os/docs:static/flatpak/expected-apps.json` — tuna-os/docs#374. `check-flatpak-remote.py` goes from a standing "2 app(s) not in expected-apps.json" warning to a real check.
+- [x] `hanthor/blueshell` archived, its PR closed. The fork had drifted 5 ahead / 25 behind; its work is in tuna-os/blueshell#83 and #84.
+- [ ] `upstream-sync.yml` confirmed working under the org on a real Monday run (label fixed, guards in #84 — but not yet exercised by a scheduled run)
+- [ ] `publish-ghostty-flatpak` confirmed on its first *scheduled* run (Sundays 05:00 UTC; so far only dispatched by hand)
 - [ ] Old repo redirect verified; announce the move in tunaOS channels
+
+## 6. Known rough edges
+
+- **`Test` never completes in this repo.** Upstream's `test.yml` runs on
+  `namespace-profile-ghostty-*` runners, which are Namespace.so machines
+  the tuna-os org does not have. Every job on those labels queues
+  forever, so "Required Checks: Test" is permanently pending on every
+  PR and cannot be a merge gate here. `ptyxis-tests` is the suite that
+  actually runs. Either wire up equivalent runners or re-point those
+  jobs at GitHub-hosted labels.
+- **`publish-flatpak.yml` is still a vendored copy** of the org
+  pipeline, including its own `update-index.py`, and is not covered by
+  `tuna-os/.github`'s drift check. Tracked in
+  tuna-os/blueshell#85; not urgent, because it carries a `release-tip`
+  job the reusable workflow has no equivalent for.
+- **`ghcr.io/tuna-os/blueshell` has no plain `:latest` tag** — the
+  vendored workflow pushes only `latest-<arch>`. Harmless (flatpak
+  resolves through the index), but it makes a plain `docker pull` of
+  that path 404 while `ghcr.io/tuna-os/ghostty:latest` works.
