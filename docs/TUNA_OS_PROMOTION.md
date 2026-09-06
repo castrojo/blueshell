@@ -92,28 +92,74 @@ flatpak remote-add --if-not-exists tuna-os https://tunaos.org/flatpak/tuna-os.fl
 flatpak install tuna-os org.tunaos.BlueShell
 ```
 
+Status: ✅ live. `app/org.tunaos.BlueShell/{x86_64,aarch64}/master` is in
+`tuna-os/docs:static/flatpak/index/static` and every push to `ptyxis-port`
+refreshes it.
+
+## 3b. Stock upstream Ghostty in the same remote
+
+The remote also carries unmodified upstream Ghostty
+(`com.mitchellh.ghostty`), published by
+`.github/workflows/publish-ghostty-flatpak.yml`. That file is trigger
+policy only — the body is the same reusable
+`tuna-os/.github/.github/workflows/publish-flatpak.yml` every other
+tuna-os app calls. Three things differ from BlueShell's own publish:
+
+- It builds from a clean checkout of `ghostty-org/ghostty` (the reusable
+  workflow's `source-repo` input) using **upstream's own** manifest,
+  `dependencies.yml` and `zig-packages.json`. Nothing about the app is
+  vendored here, so upstream dependency and runtime bumps need no action
+  in this repo.
+- It runs weekly (Sundays 05:00 UTC) plus `workflow_dispatch`, rather
+  than on push. The reusable pipeline has no "upstream unchanged"
+  short-circuit, so every run is two full Zig builds.
+- It publishes to `ghcr.io/tuna-os/ghostty` and gets its own index
+  entry, separate from blueshell's.
+
+Two traps worth knowing, because both were nearly landmines:
+
+- Upstream's manifest sets `default-branch: tip`, but the remote's
+  `tuna-os.flatpakrepo` declares `DefaultBranch=master` — a `tip` ref
+  would make `flatpak install tuna-os com.mitchellh.ghostty` fail with
+  "Nothing matches" (the 2026-07-27 incident, which
+  `check-flatpak-remote.py` exists to catch). No patch is needed:
+  flatpak-builder resolves the branch as manifest `branch:` →
+  `--default-branch` → manifest `default-branch:`, and
+  `flatpak-github-actions` always passes `--default-branch=master`. The
+  ref published is `master`. Keep that in mind before "simplifying" the
+  build away from that action.
+- The GHCR package must be made **public** by hand after the first
+  successful run. A private package fails to install exactly like a
+  missing one.
+
 ## 4. tunaos.org site listing + install instructions
 
 Being installable is not the finish line — the app must be discoverable:
 
-1. **tunaos.org listing**: the site is a Docusaurus build from
-   `tuna-os/docs` with one `docs/<app>/index.md` page per app. A
-   ready-to-copy BlueShell page in the finupdate page's format lives at
-   [`docs/site/blueshell/index.md`](site/blueshell/index.md) in this
-   repo — PR it to `tuna-os/docs:docs/blueshell/index.md` (add a
-   `sidebars.ts` entry if pages aren't auto-discovered). Short blurb if
-   an apps-overview list also needs a row:
+1. **tunaos.org listing** — the site is a Docusaurus build from
+   `tuna-os/docs`, and an app is listed in more places than one page:
 
-   > **BlueShell** — container-native terminal for GNOME. Ptyxis's
-   > container-first UX (Toolbox / Distrobox / Podman tabs, profiles,
-   > preferences) powered by the Ghostty rendering engine (GPU
-   > acceleration, Kitty graphics, ligatures, splits).
-   >
-   > `flatpak install tuna-os org.tunaos.BlueShell`
+   - `src/data/projects.ts` — drives the `/projects` card, the `/<app>`
+     landing page and `/install?app=<id>`.
+   - `src/pages/<app>.tsx` — a thin wrapper over `ProjectLanding`.
+   - `docs/<app>/index.md` — the reference page.
+   - `sidebars.ts` — the entry under **Apps**.
+   - `src/pages/flatpak.tsx` and `docs/flatpak/index.mdx` — both install
+     catalogs.
 
-   Include a screenshot from the CI `ui-walkthrough` artifact
-   (`02-prefs-appearance.png` shows the app best) and a link back to
-   `tuna-os/blueshell`.
+   One trap: `tuna-os/docs` runs `scripts/sync-org-docs.mjs`, which
+   overwrites `docs/<slug>/` from each org repo's README
+   unconditionally — and `docs/blueshell/` is such a tree. Both slugs
+   have to be in that script's `HAND_AUTHORED` set or the next sync
+   reverts the page.
+
+   `docs/site/blueshell/index.md` in this repo was the original draft for
+   that page. The published copy lives in `tuna-os/docs` and has moved on
+   from it; treat the local file as history rather than a source to
+   re-copy.
+
+   Still worth adding: a screenshot from the CI `ui-walkthrough` artifact
+   (`02-prefs-appearance.png` shows the app best).
 
 2. **README install instructions**: ✅ DONE — the "available once…"
    note is gone and the remote is the recommended path.
@@ -121,9 +167,13 @@ Being installable is not the finish line — the app must be discoverable:
 ## 5. Post-promotion checklist
 
 - [x] `ptyxis-tests` and `ghostty-ptyxis` (bundle) workflows green in the org repo
-- [x] `publish-flatpak` run pushed an image to `ghcr.io/tuna-os/blueshell` and the index PR/commit landed in `tuna-os/docs`
-- [ ] Fresh-machine install from the remote verified (`flatpak install tuna-os org.tunaos.BlueShell`)
+- [x] `publish-flatpak` run pushed an image to `ghcr.io/tuna-os/blueshell` and the index commit landed in `tuna-os/docs`
+- [x] BlueShell present in the remote index as `app/org.tunaos.BlueShell/{x86_64,aarch64}/master`
 - [x] README install section switched to the remote as the primary path (the rolling `tip` release is the "bleeding edge" alternative)
-- [ ] tunaos.org apps page lists BlueShell with install command + screenshot (PR to `tuna-os/docs`)
-- [ ] `upstream-sync.yml` weekly run confirmed working under the org (issue/PR creation permissions)
+- [x] `upstream-sync.yml` failure fixed — the `upstream-sync` label does not survive a repo transfer, and every weekly run since 2026-08-17 failed at `gh issue create --label upstream-sync`. Label recreated 2026-09-06.
+- [ ] Ghostty: first `publish-ghostty-flatpak` run green, `ghcr.io/tuna-os/ghostty` package made **public**, index entry confirmed
+- [ ] Fresh-machine install of both verified: `flatpak install tuna-os org.tunaos.BlueShell` and `flatpak install tuna-os com.mitchellh.ghostty`
+- [ ] tunaos.org site PR merged (section 4) — do this *after* the install check, since the pages present both commands as working
+- [ ] Both apps added to `tuna-os/docs:static/flatpak/expected-apps.json` with `archs: ["amd64", "arm64"]`. Deliberately last: `check-flatpak-remote.py` fails on an app listed there but absent from the index, so this turns a standing warning into a real check only once the entries exist.
+- [ ] `hanthor/blueshell` fork archived, its PR closed
 - [ ] Old repo redirect verified; announce the move in tunaOS channels
