@@ -17,6 +17,8 @@
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const global = @import("../../../global.zig");
+const compat_file = @import("../../../lib/compat/file.zig");
 
 const file_load = @import("../../../config/file_load.zig");
 
@@ -29,8 +31,8 @@ pub const Error = error{
     AlreadyExists,
     NotADirectory,
     OutOfMemory,
-} || std.fs.File.OpenError || std.fs.Dir.OpenError ||
-    std.posix.RealPathError || std.fs.File.WriteError;
+} || std.Io.File.OpenError || std.Io.Dir.OpenError ||
+    std.Io.Dir.RealPathFileAllocError || std.Io.Writer.Error;
 
 pub const Profile = struct {
     name: []const u8, // owned
@@ -83,7 +85,7 @@ fn activeMarkerPathIn(alloc: Allocator, dir: []const u8) ![]u8 {
 }
 
 fn ensureDir(dir: []const u8) !void {
-    std.fs.makeDirAbsolute(dir) catch |err| switch (err) {
+    std.Io.Dir.createDirAbsolute(global.io(), dir, .default_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
@@ -100,12 +102,12 @@ pub fn activeProfileName(alloc: Allocator) !?[]u8 {
 pub fn activeProfileNameIn(alloc: Allocator, dir: []const u8) !?[]u8 {
     const path = try activeMarkerPathIn(alloc, dir);
     defer alloc.free(path);
-    const f = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+    const f = std.Io.Dir.openFileAbsolute(global.io(), path, .{}) catch |err| switch (err) {
         error.FileNotFound => return null,
         else => return err,
     };
-    defer f.close();
-    const raw = try f.readToEndAlloc(alloc, 256);
+    defer f.close(global.io());
+    const raw = try compat_file.readToEndAlloc(f, alloc, 256);
     defer alloc.free(raw);
     const trimmed = std.mem.trim(u8, raw, " \t\r\n");
     if (trimmed.len == 0) return null;
@@ -116,9 +118,9 @@ fn writeActiveMarkerIn(alloc: Allocator, dir: []const u8, name: []const u8) !voi
     try ensureDir(dir);
     const path = try activeMarkerPathIn(alloc, dir);
     defer alloc.free(path);
-    const f = try std.fs.createFileAbsolute(path, .{ .truncate = true });
-    defer f.close();
-    try f.writeAll(name);
+    const f = try std.Io.Dir.createFileAbsolute(global.io(), path, .{ .truncate = true });
+    defer f.close(global.io());
+    try f.writeStreamingAll(global.io(), name);
 }
 
 /// List profile snapshots on disk. Caller owns the returned slice and
@@ -136,18 +138,17 @@ pub fn listIn(alloc: Allocator, dir_path: []const u8) ![]Profile {
         out.deinit(alloc);
     }
 
-    var dir = std.fs.openDirAbsolute(dir_path, .{ .iterate = true }) catch |err| switch (err) {
+    var dir = std.Io.Dir.openDirAbsolute(global.io(), dir_path, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => return try out.toOwnedSlice(alloc),
         error.NotDir => return error.NotADirectory,
         else => return err,
     };
-    defer dir.close();
+    defer dir.close(global.io());
 
     const active_name = try activeProfileNameIn(alloc, dir_path);
     defer if (active_name) |a| alloc.free(a);
 
-    var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(global.io())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".config")) continue;
         const name = entry.name[0 .. entry.name.len - ".config".len];
@@ -170,24 +171,24 @@ fn profileLess(_: void, a: Profile, b: Profile) bool {
 
 pub fn copyFile(alloc: Allocator, src: []const u8, dst: []const u8) !void {
     const data = blk: {
-        const f = std.fs.openFileAbsolute(src, .{}) catch |err| switch (err) {
+        const f = std.Io.Dir.openFileAbsolute(global.io(), src, .{}) catch |err| switch (err) {
             // No active config yet — start from empty.
             error.FileNotFound => break :blk try alloc.alloc(u8, 0),
             else => return err,
         };
-        defer f.close();
-        break :blk try f.readToEndAlloc(alloc, 16 * 1024 * 1024);
+        defer f.close(global.io());
+        break :blk try compat_file.readToEndAlloc(f, alloc, 16 * 1024 * 1024);
     };
     defer alloc.free(data);
 
     const tmp = try std.fmt.allocPrint(alloc, "{s}.tmp", .{dst});
     defer alloc.free(tmp);
     {
-        const f = try std.fs.createFileAbsolute(tmp, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(data);
+        const f = try std.Io.Dir.createFileAbsolute(global.io(), tmp, .{ .truncate = true });
+        defer f.close(global.io());
+        try f.writeStreamingAll(global.io(), data);
     }
-    try std.fs.renameAbsolute(tmp, dst);
+    try std.Io.Dir.renameAbsolute(tmp, dst, global.io());
 }
 
 /// Create a new profile by snapshotting the current active config.
@@ -206,7 +207,7 @@ pub fn addIn(alloc: Allocator, config_path: []const u8, dir: []const u8, name: [
     const dst = try profilePathIn(alloc, dir, name);
     defer alloc.free(dst);
 
-    if (std.fs.accessAbsolute(dst, .{})) |_| {
+    if (std.Io.Dir.accessAbsolute(global.io(), dst, .{})) |_| {
         return error.AlreadyExists;
     } else |err| switch (err) {
         error.FileNotFound => {}, // good — doesn't exist yet
@@ -227,7 +228,7 @@ pub fn delete(alloc: Allocator, name: []const u8) !void {
 pub fn deleteIn(alloc: Allocator, dir: []const u8, name: []const u8) !void {
     const path = try profilePathIn(alloc, dir, name);
     defer alloc.free(path);
-    std.fs.deleteFileAbsolute(path) catch |err| switch (err) {
+    std.Io.Dir.deleteFileAbsolute(global.io(), path) catch |err| switch (err) {
         error.FileNotFound => return error.ProfileNotFound,
         else => return err,
     };
@@ -238,7 +239,7 @@ pub fn deleteIn(alloc: Allocator, dir: []const u8, name: []const u8) !void {
         if (std.mem.eql(u8, active, name)) {
             const m = try activeMarkerPathIn(alloc, dir);
             defer alloc.free(m);
-            std.fs.deleteFileAbsolute(m) catch {};
+            std.Io.Dir.cwd().deleteFile(global.io(), m) catch {};
         }
     }
     log.info("deleted profile {s}", .{name});
@@ -258,11 +259,11 @@ pub fn switchToIn(alloc: Allocator, config_path: []const u8, dir: []const u8, na
     const src = try profilePathIn(alloc, dir, name);
     defer alloc.free(src);
     // Verify the snapshot exists before clobbering the active config.
-    const check = std.fs.openFileAbsolute(src, .{}) catch |err| switch (err) {
+    const check = std.Io.Dir.openFileAbsolute(global.io(), src, .{}) catch |err| switch (err) {
         error.FileNotFound => return error.ProfileNotFound,
         else => return err,
     };
-    check.close();
+    check.close(global.io());
     if (std.fs.path.dirname(config_path)) |d| try ensureDir(d);
     try copyFile(alloc, src, config_path);
     try writeActiveMarkerIn(alloc, dir, name);
@@ -283,11 +284,11 @@ pub fn updateFromActive(alloc: Allocator, name: []const u8) !void {
 pub fn updateFromActiveIn(alloc: Allocator, config_path: []const u8, dir: []const u8, name: []const u8) !void {
     const dst = try profilePathIn(alloc, dir, name);
     defer alloc.free(dst);
-    const check = std.fs.openFileAbsolute(dst, .{}) catch |err| switch (err) {
+    const check = std.Io.Dir.openFileAbsolute(global.io(), dst, .{}) catch |err| switch (err) {
         error.FileNotFound => return error.ProfileNotFound,
         else => return err,
     };
-    check.close();
+    check.close(global.io());
     try copyFile(alloc, config_path, dst);
     log.info("updated profile {s} from active config", .{name});
 }
@@ -313,7 +314,7 @@ const TestEnv = struct {
     fn init(alloc: Allocator) !TestEnv {
         var tmp = std.testing.tmpDir(.{});
         errdefer tmp.cleanup();
-        const base = try tmp.dir.realpathAlloc(alloc, ".");
+        const base = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
         errdefer alloc.free(base);
         const config_path = try std.fmt.allocPrint(alloc, "{s}/config", .{base});
         errdefer alloc.free(config_path);
@@ -329,15 +330,15 @@ const TestEnv = struct {
     }
 
     fn writeConfig(self: *TestEnv, contents: []const u8) !void {
-        const f = try std.fs.createFileAbsolute(self.config_path, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(contents);
+        const f = try std.Io.Dir.createFileAbsolute(std.testing.io, self.config_path, .{ .truncate = true });
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, contents);
     }
 
     fn readConfig(self: *TestEnv, alloc: Allocator) ![]u8 {
-        const f = try std.fs.openFileAbsolute(self.config_path, .{});
-        defer f.close();
-        return try f.readToEndAlloc(alloc, 1 << 20);
+        const f = try std.Io.Dir.openFileAbsolute(std.testing.io, self.config_path, .{});
+        defer f.close(std.testing.io);
+        return try compat_file.readToEndAlloc(f, alloc, 1 << 20);
     }
 };
 
@@ -407,9 +408,9 @@ test "profile_store: add/list/switch/delete round-trip" {
     {
         const p = try profilePathIn(alloc, env.profiles_dir, "work");
         defer alloc.free(p);
-        const f = try std.fs.openFileAbsolute(p, .{});
-        defer f.close();
-        const data = try f.readToEndAlloc(alloc, 1 << 20);
+        const f = try std.Io.Dir.openFileAbsolute(std.testing.io, p, .{});
+        defer f.close(std.testing.io);
+        const data = try compat_file.readToEndAlloc(f, alloc, 1 << 20);
         defer alloc.free(data);
         try std.testing.expectEqualStrings("background-opacity = 0.7\n", data);
     }
@@ -432,9 +433,9 @@ test "profile_store: add with no active config starts empty" {
     try addIn(alloc, env.config_path, env.profiles_dir, "fresh");
     const p = try profilePathIn(alloc, env.profiles_dir, "fresh");
     defer alloc.free(p);
-    const f = try std.fs.openFileAbsolute(p, .{});
-    defer f.close();
-    const data = try f.readToEndAlloc(alloc, 1 << 20);
+    const f = try std.Io.Dir.openFileAbsolute(std.testing.io, p, .{});
+    defer f.close(std.testing.io);
+    const data = try compat_file.readToEndAlloc(f, alloc, 1 << 20);
     defer alloc.free(data);
     try std.testing.expectEqual(@as(usize, 0), data.len);
 }

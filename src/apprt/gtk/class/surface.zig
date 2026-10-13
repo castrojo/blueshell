@@ -2544,9 +2544,9 @@ pub const Surface = extern struct {
             "/proc/{d}/" ++ name,
             .{pid},
         ) catch return null;
-        const file = std.fs.openFileAbsolute(path, .{}) catch return null;
-        defer file.close();
-        const n = file.read(buf) catch return null;
+        const file = std.Io.Dir.openFileAbsolute(global.io(), path, .{}) catch return null;
+        defer file.close(global.io());
+        const n = file.readStreaming(global.io(), &.{buf}) catch return null;
         return buf[0..n];
     }
 

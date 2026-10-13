@@ -684,7 +684,6 @@ fn setupXdgDataDirs(
         .{host_resource_dir},
     );
 
-
     // Set an env var so we can remove this from XDG_DATA_DIRS later.
     // This happens in the shell integration config itself. We do this
     // so that our modifications don't interfere with other commands.
@@ -1070,7 +1069,7 @@ test "zsh: host resources dir" {
     defer arena.deinit();
     const alloc = arena.allocator();
 
-    var res: TmpResourcesDir = try .init(testing.allocator, .zsh);
+    var res: TmpResourcesDir = try .init(.zsh);
     defer res.deinit();
 
     var env = EnvMap.init(testing.allocator);
@@ -1098,7 +1097,7 @@ test "xdg: host resources dir" {
     defer arena.deinit();
     const alloc = arena.allocator();
 
-    var res: TmpResourcesDir = try .init(alloc, .fish);
+    var res: TmpResourcesDir = try .init(.fish);
     defer res.deinit();
 
     var env = EnvMap.init(alloc);

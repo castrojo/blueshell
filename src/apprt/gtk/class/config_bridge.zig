@@ -16,6 +16,8 @@
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const global = @import("../../../global.zig");
+const compat_file = @import("../../../lib/compat/file.zig");
 
 const file_load = @import("../../../config/file_load.zig");
 
@@ -36,7 +38,7 @@ pub fn setKey(alloc: Allocator, key: []const u8, value: []const u8, maybe_path: 
 
     // Ensure parent directory exists.
     if (std.fs.path.dirname(path)) |dir| {
-        std.fs.makeDirAbsolute(dir) catch |err| switch (err) {
+        std.Io.Dir.createDirAbsolute(global.io(), dir, .default_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
@@ -46,12 +48,12 @@ pub fn setKey(alloc: Allocator, key: []const u8, value: []const u8, maybe_path: 
     var existing: []u8 = &.{};
     defer if (existing.len != 0) alloc.free(existing);
     existing = blk: {
-        const f = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+        const f = std.Io.Dir.openFileAbsolute(global.io(), path, .{}) catch |err| switch (err) {
             error.FileNotFound => break :blk &.{},
             else => return err,
         };
-        defer f.close();
-        break :blk try f.readToEndAlloc(alloc, 16 * 1024 * 1024);
+        defer f.close(global.io());
+        break :blk try compat_file.readToEndAlloc(f, alloc, 16 * 1024 * 1024);
     };
 
     var out: std.ArrayList(u8) = .empty;
@@ -59,7 +61,9 @@ pub fn setKey(alloc: Allocator, key: []const u8, value: []const u8, maybe_path: 
 
     const new_line_writer = struct {
         fn write(buf: *std.ArrayList(u8), a: Allocator, k: []const u8, v: []const u8) !void {
-            try buf.writer(a).print("{s} = {s}\n", .{ k, v });
+            const line = try std.fmt.allocPrint(a, "{s} = {s}\n", .{ k, v });
+            defer a.free(line);
+            try buf.appendSlice(a, line);
         }
     };
 
@@ -102,11 +106,11 @@ pub fn setKey(alloc: Allocator, key: []const u8, value: []const u8, maybe_path: 
     defer alloc.free(tmp_path);
 
     {
-        const f = try std.fs.createFileAbsolute(tmp_path, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(out.items);
+        const f = try std.Io.Dir.createFileAbsolute(global.io(), tmp_path, .{ .truncate = true });
+        defer f.close(global.io());
+        try f.writeStreamingAll(global.io(), out.items);
     }
-    try std.fs.renameAbsolute(tmp_path, path);
+    try std.Io.Dir.renameAbsolute(tmp_path, path, global.io());
 
     log.info("config write: {s} = {s} -> {s}", .{ key, value, path });
 }
@@ -119,7 +123,7 @@ pub fn setKeyList(alloc: Allocator, key: []const u8, values: []const []const u8,
     defer alloc.free(path);
 
     if (std.fs.path.dirname(path)) |dir| {
-        std.fs.makeDirAbsolute(dir) catch |err| switch (err) {
+        std.Io.Dir.createDirAbsolute(global.io(), dir, .default_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
@@ -128,12 +132,12 @@ pub fn setKeyList(alloc: Allocator, key: []const u8, values: []const []const u8,
     var existing: []u8 = &.{};
     defer if (existing.len != 0) alloc.free(existing);
     existing = blk: {
-        const f = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+        const f = std.Io.Dir.openFileAbsolute(global.io(), path, .{}) catch |err| switch (err) {
             error.FileNotFound => break :blk &.{},
             else => return err,
         };
-        defer f.close();
-        break :blk try f.readToEndAlloc(alloc, 16 * 1024 * 1024);
+        defer f.close(global.io());
+        break :blk try compat_file.readToEndAlloc(f, alloc, 16 * 1024 * 1024);
     };
 
     var out: std.ArrayList(u8) = .empty;
@@ -151,17 +155,19 @@ pub fn setKeyList(alloc: Allocator, key: []const u8, values: []const []const u8,
         try out.append(alloc, '\n');
     }
     for (values) |v| {
-        try out.writer(alloc).print("{s} = {s}\n", .{ key, v });
+        const line = try std.fmt.allocPrint(alloc, "{s} = {s}\n", .{ key, v });
+        defer alloc.free(line);
+        try out.appendSlice(alloc, line);
     }
 
     const tmp_path = try std.fmt.allocPrint(alloc, "{s}.tmp", .{path});
     defer alloc.free(tmp_path);
     {
-        const f = try std.fs.createFileAbsolute(tmp_path, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(out.items);
+        const f = try std.Io.Dir.createFileAbsolute(global.io(), tmp_path, .{ .truncate = true });
+        defer f.close(global.io());
+        try f.writeStreamingAll(global.io(), out.items);
     }
-    try std.fs.renameAbsolute(tmp_path, path);
+    try std.Io.Dir.renameAbsolute(tmp_path, path, global.io());
 
     log.info("config list write: {s} ({d} entries) -> {s}", .{ key, values.len, path });
 }
@@ -196,7 +202,7 @@ pub fn writeTheme(
 
     const dir = try resolveThemesDir(alloc);
     defer alloc.free(dir);
-    std.fs.makeDirAbsolute(dir) catch |err| switch (err) {
+    std.Io.Dir.createDirAbsolute(global.io(), dir, .default_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
@@ -207,11 +213,11 @@ pub fn writeTheme(
     const tmp_path = try std.fmt.allocPrint(alloc, "{s}.tmp", .{path});
     defer alloc.free(tmp_path);
     {
-        const f = try std.fs.createFileAbsolute(tmp_path, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(contents);
+        const f = try std.Io.Dir.createFileAbsolute(global.io(), tmp_path, .{ .truncate = true });
+        defer f.close(global.io());
+        try f.writeStreamingAll(global.io(), contents);
     }
-    try std.fs.renameAbsolute(tmp_path, path);
+    try std.Io.Dir.renameAbsolute(tmp_path, path, global.io());
 
     log.info("wrote theme: {s}", .{path});
 }
@@ -238,7 +244,7 @@ pub fn setKeybind(alloc: Allocator, bind_key: []const u8, maybe_action: ?[]const
     defer alloc.free(path);
 
     if (std.fs.path.dirname(path)) |dir| {
-        std.fs.makeDirAbsolute(dir) catch |err| switch (err) {
+        std.Io.Dir.createDirAbsolute(global.io(), dir, .default_dir) catch |err| switch (err) {
             error.PathAlreadyExists => {},
             else => return err,
         };
@@ -247,12 +253,12 @@ pub fn setKeybind(alloc: Allocator, bind_key: []const u8, maybe_action: ?[]const
     var existing: []u8 = &.{};
     defer if (existing.len != 0) alloc.free(existing);
     existing = blk: {
-        const f = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+        const f = std.Io.Dir.openFileAbsolute(global.io(), path, .{}) catch |err| switch (err) {
             error.FileNotFound => break :blk &.{},
             else => return err,
         };
-        defer f.close();
-        break :blk try f.readToEndAlloc(alloc, 16 * 1024 * 1024);
+        defer f.close(global.io());
+        break :blk try compat_file.readToEndAlloc(f, alloc, 16 * 1024 * 1024);
     };
 
     var out: std.ArrayList(u8) = .empty;
@@ -271,17 +277,19 @@ pub fn setKeybind(alloc: Allocator, bind_key: []const u8, maybe_action: ?[]const
         if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') {
             try out.append(alloc, '\n');
         }
-        try out.writer(alloc).print("keybind = {s}={s}\n", .{ bind_key, action });
+        const line = try std.fmt.allocPrint(alloc, "keybind = {s}={s}\n", .{ bind_key, action });
+        defer alloc.free(line);
+        try out.appendSlice(alloc, line);
     }
 
     const tmp_path = try std.fmt.allocPrint(alloc, "{s}.tmp", .{path});
     defer alloc.free(tmp_path);
     {
-        const f = try std.fs.createFileAbsolute(tmp_path, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(out.items);
+        const f = try std.Io.Dir.createFileAbsolute(global.io(), tmp_path, .{ .truncate = true });
+        defer f.close(global.io());
+        try f.writeStreamingAll(global.io(), out.items);
     }
-    try std.fs.renameAbsolute(tmp_path, path);
+    try std.Io.Dir.renameAbsolute(tmp_path, path, global.io());
 
     log.info("config keybind write: {s} -> {s}", .{ bind_key, path });
 }
@@ -335,7 +343,7 @@ const TestFile = struct {
     fn init(alloc: Allocator) !TestFile {
         var tmp = std.testing.tmpDir(.{});
         errdefer tmp.cleanup();
-        const base = try tmp.dir.realpathAlloc(alloc, ".");
+        const base = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
         defer alloc.free(base);
         const path = try std.fmt.allocPrint(alloc, "{s}/config", .{base});
         return .{ .tmp = tmp, .path = path };
@@ -347,15 +355,15 @@ const TestFile = struct {
     }
 
     fn write(self: *TestFile, contents: []const u8) !void {
-        const f = try std.fs.createFileAbsolute(self.path, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(contents);
+        const f = try std.Io.Dir.createFileAbsolute(std.testing.io, self.path, .{ .truncate = true });
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, contents);
     }
 
     fn read(self: *TestFile, alloc: Allocator) ![]u8 {
-        const f = try std.fs.openFileAbsolute(self.path, .{});
-        defer f.close();
-        return try f.readToEndAlloc(alloc, 1 << 20);
+        const f = try std.Io.Dir.openFileAbsolute(std.testing.io, self.path, .{});
+        defer f.close(std.testing.io);
+        return try compat_file.readToEndAlloc(f, alloc, 1 << 20);
     }
 };
 

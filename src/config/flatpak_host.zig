@@ -11,7 +11,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const internal_os = @import("../os/main.zig");
-const env_os = @import("../os/env.zig");
+const global = @import("../global.zig");
 
 /// The env var Flatpak sets to the host's `XDG_CONFIG_HOME`, when the host
 /// has one set.
@@ -23,18 +23,26 @@ const host_env = "HOST_XDG_CONFIG_HOME";
 pub fn path(alloc: Allocator, subdir: []const u8) !?[]u8 {
     if (!internal_os.isFlatpak()) return null;
 
-    const host_xdg = try env_os.getenvNotEmpty(alloc, host_env);
-    defer if (host_xdg) |v| v.deinit(alloc);
+    var environ_map = try global.environMap();
+    defer environ_map.deinit();
 
-    var home_buf: [1024]u8 = undefined;
-    const home = try internal_os.home(&home_buf);
+    const host_xdg_raw = environ_map.get(host_env) orelse "";
+    const host_xdg: ?[]const u8 = if (host_xdg_raw.len > 0) host_xdg_raw else null;
 
-    const sandbox = try internal_os.xdg.config(alloc, .{ .subdir = subdir });
+    var home_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const home = try internal_os.home(global.io(), &environ_map, &home_buf);
+
+    const sandbox = try internal_os.xdg.config(
+        global.io(),
+        alloc,
+        &environ_map,
+        .{ .subdir = subdir },
+    );
     defer alloc.free(sandbox);
 
     return try resolve(
         alloc,
-        if (host_xdg) |v| v.value else null,
+        host_xdg,
         home,
         subdir,
         sandbox,

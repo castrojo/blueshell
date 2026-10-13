@@ -97,12 +97,6 @@ pub const Message = union(enum) {
     /// Write where the data is allocated and must be freed.
     write_alloc: WriteReq.Alloc,
 
-    /// The payload of the kitty_clipboard_grant_* messages. The
-    /// password is allocated and must be freed.
-    pub const KittyClipboardGrant = struct {
-        alloc: Allocator,
-        pw: []const u8,
-    };
     /// BlueShell: feed bytes through the terminal stream parser as if
     /// they were read from the pty. Used for per-surface OSC injection
     /// (e.g. per-tab palette overrides via OSC 4/10/11/12) — unlike the
@@ -111,6 +105,12 @@ pub const Message = union(enum) {
     /// Restart the subprocess in-place. Sent by the main thread when
     /// exit-action = restart after a child exits.
     restart_subprocess: void,
+    /// The payload of the kitty_clipboard_grant_* messages. The
+    /// password is allocated and must be freed.
+    pub const KittyClipboardGrant = struct {
+        alloc: Allocator,
+        pw: []const u8,
+    };
 
     /// Return a write request for the given data. This will use
     /// write_small if it fits or write_alloc otherwise. This should NOT
