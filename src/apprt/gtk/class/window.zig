@@ -8,6 +8,7 @@ const glib = @import("glib");
 const gobject = @import("gobject");
 const gtk = @import("gtk");
 
+const i18n = @import("../../../os/main.zig").i18n;
 const global = @import("../../../global.zig");
 const compat_fd = @import("../../../lib/compat/fd.zig");
 const apprt = @import("../../../apprt.zig");
