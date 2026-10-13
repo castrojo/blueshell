@@ -247,7 +247,7 @@ pub fn restartSubprocess(
     read_thread.setName(global.io(), "io-reader") catch {};
 
     // Update all mutable thread-local exec data.
-    data.start = try std.time.Instant.now();
+    data.start = std.Io.Timestamp.now(global.io(), .awake);
     data.exited = false;
     data.write_stream = stream;
     data.read_thread = read_thread;
