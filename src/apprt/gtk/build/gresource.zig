@@ -190,7 +190,7 @@ fn genIcons(io: std.Io, writer: *std.Io.Writer) !void {
     // "container-toolbox-symbolic") without touching the system theme.
     inline for (container_icons) |name| {
         const source = "src/apprt/gtk/icons/scalable/actions/" ++ name ++ ".svg";
-        try cwd.access(source, .{});
+        try cwd.access(io, source, .{});
         try writer.print(
             \\    <file alias="scalable/actions/{s}.svg">{s}</file>
             \\

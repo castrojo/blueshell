@@ -147,7 +147,7 @@ pub fn listIn(alloc: Allocator, dir_path: []const u8) ![]Profile {
 
     const active_name = try activeProfileNameIn(alloc, dir_path);
     defer if (active_name) |a| alloc.free(a);
-
+    var it = dir.iterate();
     while (try it.next(global.io())) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".config")) continue;
