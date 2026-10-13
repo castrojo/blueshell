@@ -1,0 +1,72 @@
+app-id: com.mitchellh.ghostty
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+default-branch: tip
+
+# Runs the TunaOS launcher, which execs the real binary after adding
+# the host's ~/.config/ghostty as optional config files.
+command: ghostty
+
+finish-args:
+  # 3D rendering
+  - --device=dri
+  # use host PTS namespace
+  - --device=all
+  # Windowing
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  # The launcher reads $HOME/.config/ghostty via --config-file, so the
+  # host config users edit actually takes effect (tuna-os/blueshell#117).
+  - --filesystem=home:ro
+  # So we can escape the sandbox
+  - --talk-name=org.freedesktop.Flatpak
+cleanup:
+  - /include
+  - /lib/girepository-1.0
+  - /lib/pkgconfig
+  - /share/gir-1.0
+  - /share/pkgconfig
+  - /share/vala
+  - "*.la"
+  - "*.a"
+  - "*.so"
+
+modules:
+  - dependencies.yml
+
+  - name: ghostty
+    buildsystem: simple
+    build-options:
+      append-path: /app/zig
+    build-commands:
+      # Upstream's own build, unchanged. Compare against the pinned ref's
+      # flatpak/com.mitchellh.ghostty.yml when bumping the pin below.
+      - zig build
+        -Doptimize=ReleaseFast
+        -Dcpu=baseline
+        -Dflatpak=true
+        -Dstrip=false
+        -fno-sys=oniguruma
+        --prefix /app
+        --search-prefix /app
+        --system $PWD/vendor/p
+      # The desktop file and `command:` both resolve to /app/bin/ghostty,
+      # so the wrapper takes that name and the real binary moves aside.
+      - mv /app/bin/ghostty /app/bin/ghostty.bin
+      - install -Dm755 launcher.sh /app/bin/ghostty
+    sources:
+      # Pinned upstream. Bump deliberately after checking the build in a
+      # VM (see publish-ghostty-flatpak.yml); when you do, refresh the
+      # two vendored files noted in dependencies.yml.
+      - type: git
+        url: https://github.com/ghostty-org/ghostty.git
+        commit: ef7edc4a24cf3ef0d6862276602e09f7b4b11b40
+
+      # Must be named exactly zig-packages.json: flatpak-builder only
+      # downloads and unpacks the listed archives for that filename.
+      - zig-packages.json
+
+      - type: file
+        path: launcher.sh

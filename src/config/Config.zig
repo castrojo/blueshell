@@ -26,6 +26,7 @@ const cli = @import("../cli.zig");
 const conditional = @import("conditional.zig");
 const Conditional = conditional.Conditional;
 const file_load = @import("file_load.zig");
+const flatpak_host = @import("flatpak_host.zig");
 const formatterpkg = @import("formatter.zig");
 const themepkg = @import("theme.zig");
 const url = @import("url.zig");
@@ -4382,8 +4383,14 @@ fn writeConfigTemplate(path: []const u8) !void {
 ///
 /// The legacy `config` file (without extension) is first loaded,
 /// then `config.ghostty`.
+///
+/// Inside a Flatpak sandbox `$XDG_CONFIG_HOME` is the app's private
+/// directory, so the host's `~/.config/ghostty` is loaded first as a base
+/// layer and the sandbox-local XDG files override it.
 pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
-    // Load XDG first
+    const host_loaded = try self.loadFlatpakHostFiles(alloc);
+
+    // Load XDG
     const legacy_xdg_path = try file_load.legacyDefaultXdgPath(alloc);
     defer alloc.free(legacy_xdg_path);
     const xdg_path = try file_load.defaultXdgPath(alloc);
@@ -4446,12 +4453,26 @@ pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
             };
         }
     } else {
-        if (!xdg_loaded) {
+        if (!xdg_loaded and !host_loaded) {
             writeConfigTemplate(xdg_path) catch |err| {
                 log.warn("error creating template config file err={}", .{err});
             };
         }
     }
+}
+
+/// Load the host's config files (`~/.config/ghostty/config{,.ghostty}`) when
+/// running in a Flatpak sandbox. Returns true if any file was found. Does
+/// nothing outside Flatpak.
+fn loadFlatpakHostFiles(self: *Config, alloc: Allocator) !bool {
+    var loaded = false;
+    inline for (.{ "ghostty/config", "ghostty/config.ghostty" }) |subdir| {
+        if (try flatpak_host.path(alloc, subdir)) |path| {
+            defer alloc.free(path);
+            if (self.loadOptionalFile(alloc, path) != .not_found) loaded = true;
+        }
+    }
+    return loaded;
 }
 
 /// Load and parse the CLI args.

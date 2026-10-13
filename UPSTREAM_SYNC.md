@@ -86,7 +86,7 @@ workflow's `fetch upstream main` at the release tag instead.
 
 ## Publishing upstream Ghostty alongside BlueShell
 
-`.github/workflows/publish-ghostty-flatpak.yml` builds **unmodified
+`.github/workflows/publish-ghostty-flatpak.yml` builds **pinned
 upstream Ghostty** (`com.mitchellh.ghostty`) and publishes it to the same
 TunaOS Flatpak remote as BlueShell, so a user can install either terminal
 — or both, since the app IDs differ — from one remote:
@@ -95,25 +95,27 @@ TunaOS Flatpak remote as BlueShell, so a user can install either terminal
 flatpak install tuna-os com.mitchellh.ghostty
 ```
 
-It shares no source with this fork. The workflow is trigger policy only;
-the body is the canonical reusable pipeline in `tuna-os/.github`, pointed
-at a clean checkout of `ghostty-org/ghostty` via that workflow's
-`source-repo` input. It builds with **upstream's own**
-`flatpak/com.mitchellh.ghostty.yml`, `dependencies.yml` and
-`zig-packages.json`. That is what keeps it current by construction: no
-manifest, no dependency pin and no runtime version is maintained here, so
-upstream bumping any of them is picked up by the next run with no change
-to this repo.
+The manifest is owned by this repo
+(`flatpak/ghostty-stock/com.mitchellh.ghostty.yml`): it builds a pinned upstream
+commit (a `type: git` source) with upstream's build commands unchanged,
+plus one TunaOS addition — a launcher wrapper that passes the host's
+`~/.config/ghostty` as optional config files, since Flatpak redirects
+`XDG_CONFIG_HOME` into the sandbox (tuna-os/blueshell#117). No patches
+to upstream's source. The workflow file is trigger policy only; the body
+is the canonical reusable pipeline in `tuna-os/.github`.
 
-It runs weekly (Sundays 05:00 UTC) plus `workflow_dispatch` with an
-optional ref. Weekly, not daily, because the reusable pipeline has no
-"upstream unchanged" short-circuit — every run is two full Zig builds.
+The price of the wrapper is two vendored files
+(`flatpak/ghostty-stock/dependencies.yml`,
+`flatpak/ghostty-stock/zig-packages.json`), copied from upstream at the
+pinned ref. Bumping the pin means refreshing them and diffing the
+build-commands against the new ref's own manifest — the header comments
+on each file say exactly how. Pull requests touching any of these files
+get a build-only validation run (no publish), so pin bumps are checked
+before they ship.
 
-The vendored `flatpak/com.mitchellh.ghostty.yml` in *this* repo is a
-different thing: it is upstream's manifest carried along by the fork for
-local builds, and it is **not** what the publish workflow uses. Its
-sources are `type: dir, path: ..`, so building it here would produce
-BlueShell's code under upstream's app ID.
+It runs weekly (Sundays 05:00 UTC) plus `workflow_dispatch`. Weekly, not
+daily, because the reusable pipeline has no "upstream unchanged"
+short-circuit — every run is two full Zig builds.
 
 One upstream detail worth knowing: that manifest sets
 `default-branch: tip`, while the remote's `tuna-os.flatpakrepo` declares
