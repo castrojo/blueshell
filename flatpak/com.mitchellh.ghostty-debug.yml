@@ -14,7 +14,10 @@ finish-args:
   - --share=ipc
   - --socket=fallback-x11
   - --socket=wayland
-  # Allow user to specify additional config files in home by default
+  # Read the host's ~/.config/ghostty (config, themes) and any config-file
+  # includes in $HOME. Flatpak redirects XDG_CONFIG_HOME into
+  # ~/.var/app/<id>/config, so src/config/flatpak_host.zig loads the host
+  # config as a base layer; the sandbox-local config overrides it.
   - --filesystem=home:ro
   # So we can escape the sandbox
   - --talk-name=org.freedesktop.Flatpak
