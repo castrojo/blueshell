@@ -2578,7 +2578,7 @@ pub const Surface = extern struct {
         if (pgrp <= 0) return null;
 
         var comm_buf: [64]u8 = undefined;
-        const comm = std.mem.trimRight(
+        const comm = std.mem.trimEnd(
             u8,
             readProcFile(pgrp, "comm", &comm_buf) orelse "",
             "\n",

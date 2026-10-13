@@ -212,7 +212,7 @@ pub fn restartSubprocess(
         else => {},
     }
     data.read_thread.join();
-    posix.close(data.read_thread_pipe);
+    compat_fd.close(data.read_thread_pipe);
 
     // Deinit old write stream and process watcher.
     data.write_stream.deinit();

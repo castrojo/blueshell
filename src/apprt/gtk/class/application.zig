@@ -18,6 +18,7 @@ const i18n = @import("../../../os/main.zig").i18n;
 const apprt = @import("../../../apprt.zig");
 const CoreApp = @import("../../../App.zig");
 const compat_file = @import("../../../lib/compat/file.zig");
+const compat_fd = @import("../../../lib/compat/fd.zig");
 const configpkg = @import("../../../config.zig");
 const input = @import("../../../input.zig");
 const internal_os = @import("../../../os/main.zig");
@@ -1516,7 +1517,7 @@ pub const Application = extern struct {
                 };
                 if (fd >= 0) {
                     log.info("CreatePty smoke ok: master fd={d}", .{fd});
-                    std.posix.close(fd);
+                    compat_fd.close(fd);
                 }
             }
         }
@@ -1551,7 +1552,7 @@ pub const Application = extern struct {
         } else return error.ContainerNotFound;
 
         const master = try c_ptr.createPty();
-        defer std.posix.close(master);
+        defer compat_fd.close(master);
 
         // Open slave.
         const Libc = struct {
@@ -1565,7 +1566,7 @@ pub const Application = extern struct {
         const slave_name = Libc.ptsname(master) orelse return error.PtsName;
         const slave_fd = Libc.open(slave_name, 2 | 0o400);
         if (slave_fd < 0) return error.OpenSlave;
-        defer std.posix.close(slave_fd);
+        defer compat_fd.close(slave_fd);
 
         log.info("smoke spawn: container={s} master={d} slave_name={s}", .{
             container_path, master, slave_name,
@@ -1639,7 +1640,7 @@ pub const Application = extern struct {
         }
 
         // Try paths relative to the running executable.
-        if (std.fs.selfExePathAlloc(alloc)) |self_exe| {
+        if (std.process.executablePathAlloc(global.io(), alloc)) |self_exe| {
             defer alloc.free(self_exe);
             if (std.fs.path.dirname(self_exe)) |bin_dir| {
                 // ${prefix}/libexec/ptyxis-agent (installed layout)
@@ -1649,7 +1650,7 @@ pub const Application = extern struct {
                         &.{ prefix, "libexec", "ptyxis-agent" },
                     );
                     errdefer alloc.free(installed);
-                    if (std.fs.accessAbsolute(installed, .{})) {
+                    if (std.Io.Dir.accessAbsolute(global.io(), installed, .{})) {
                         return installed;
                     } else |_| alloc.free(installed);
                 }
@@ -1663,7 +1664,7 @@ pub const Application = extern struct {
                             &.{ repo, "third_party", "ptyxis-agent", "build", "ptyxis-agent" },
                         );
                         errdefer alloc.free(dev_path);
-                        if (std.fs.accessAbsolute(dev_path, .{})) {
+                        if (std.Io.Dir.accessAbsolute(global.io(), dev_path, .{})) {
                             return dev_path;
                         } else |_| alloc.free(dev_path);
                     }
@@ -1677,7 +1678,7 @@ pub const Application = extern struct {
             "/usr/libexec/ptyxis-agent",
         };
         for (candidates) |c| {
-            std.fs.accessAbsolute(c, .{}) catch continue;
+            std.Io.Dir.accessAbsolute(global.io(), c, .{}) catch continue;
             return try alloc.dupeZ(u8, c);
         }
         return error.AgentNotFound;
