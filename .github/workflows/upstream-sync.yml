@@ -90,7 +90,13 @@ jobs:
           # Don't stack sync branches. If the previous sync PR hasn't been
           # dealt with, a second one covers an overlapping commit range and
           # the two conflict with each other rather than with upstream.
-          open_sync=$(gh pr list --state open --base ptyxis-port \
+          # NOTE: --repo is required on every gh call in this workflow.
+          # The checkout has both `origin` (this repo) and `upstream`
+          # (ghostty-org/ghostty) remotes, and gh resolves ambiguously
+          # between them -- without it these commands silently target
+          # upstream (this is why the conflict alarm never fired: `gh issue
+          # create` failed with "label not found" against upstream).
+          open_sync=$(gh pr list --repo "${{ github.repository }}" --state open --base ptyxis-port \
             --json headRefName \
             --jq '[.[] | select(.headRefName | startswith("upstream-sync/"))] | length')
           if [ "${open_sync}" != "0" ]; then
@@ -128,6 +134,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr create \
+            --repo "${{ github.repository }}" \
             --base ptyxis-port \
             --head "${{ steps.meta.outputs.branch }}" \
             --title "chore: rebase onto upstream ${{ steps.meta.outputs.upstream_short }}" \
@@ -156,6 +163,7 @@ jobs:
         run: |
           conflicts="$(cat /tmp/conflicts.txt)"
           gh issue create \
+            --repo "${{ github.repository }}" \
             --title "upstream-sync ${{ steps.meta.outputs.date }}: rebase conflicts on ${{ steps.meta.outputs.upstream_short }}" \
             --label upstream-sync \
             --body "$(cat <<EOF
