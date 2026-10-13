@@ -343,7 +343,11 @@ const TestFile = struct {
     fn init(alloc: Allocator) !TestFile {
         var tmp = std.testing.tmpDir(.{});
         errdefer tmp.cleanup();
-        const base = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
+        // NB: see profile_store.zig TestEnv — realPathFileAlloc's
+        // sentinel byte trips the test allocator's size check on free.
+        var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const path_len = try tmp.dir.realPathFile(std.testing.io, ".", &path_buf);
+        const base = try alloc.dupe(u8, path_buf[0..path_len]);
         defer alloc.free(base);
         const path = try std.fmt.allocPrint(alloc, "{s}/config", .{base});
         return .{ .tmp = tmp, .path = path };

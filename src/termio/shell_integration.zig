@@ -1122,7 +1122,7 @@ test "xdg: host resources dir" {
 /// Test helper that creates a temporary resources directory with shell integration paths.
 const TmpResourcesDir = struct {
     tmp_dir: std.testing.TmpDir,
-    path: [:0]const u8,
+    path: []const u8,
     shell_path: []const u8,
 
     fn init(shell: Shell) !TmpResourcesDir {
@@ -1137,7 +1137,11 @@ const TmpResourcesDir = struct {
         );
         try tmp_dir.dir.createDirPath(std.testing.io, relative_shell_path);
 
-        const path = try tmp_dir.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+        // NB: realPathFileAlloc over-allocates by one (sentinel) which
+        // trips the test allocator's size check on free.
+        var real_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const real_len = try tmp_dir.dir.realPathFile(std.testing.io, ".", &real_buf);
+        const path = try std.testing.allocator.dupe(u8, real_buf[0..real_len]);
         errdefer std.testing.allocator.free(path);
 
         const shell_path = try std.fmt.allocPrint(

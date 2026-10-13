@@ -314,7 +314,12 @@ const TestEnv = struct {
     fn init(alloc: Allocator) !TestEnv {
         var tmp = std.testing.tmpDir(.{});
         errdefer tmp.cleanup();
-        const base = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
+        // NB: realPathFileAlloc over-allocates by one (sentinel) which
+        // trips the test allocator's size check on free, so resolve
+        // into a stack buffer and dupe the exact bytes instead.
+        var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const path_len = try tmp.dir.realPathFile(std.testing.io, ".", &path_buf);
+        const base = try alloc.dupe(u8, path_buf[0..path_len]);
         errdefer alloc.free(base);
         const config_path = try std.fmt.allocPrint(alloc, "{s}/config", .{base});
         errdefer alloc.free(config_path);
