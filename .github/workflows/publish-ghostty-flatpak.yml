@@ -43,9 +43,11 @@ on:
       - flatpak/ghostty-stock-zig-packages.json
       - flatpak/ghostty-stock-launcher.sh
       - .github/workflows/publish-ghostty-flatpak.yml
-
 permissions:
-  contents: read
+  # Must cover the reusable workflow's own block (contents: write,
+  # packages: write): a caller granting less fails every run at startup
+  # with no jobs and no error detail (seen 2026-10-11).
+  contents: write
   packages: write
 
 jobs:
