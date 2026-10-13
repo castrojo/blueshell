@@ -244,7 +244,7 @@ pub fn restartSubprocess(
         if (comptime builtin.os.tag == .windows) ReadThread.threadMainWindows else ReadThread.threadMainPosix,
         .{ pty_fds.read, io, pipe[0] },
     );
-    read_thread.setName("io-reader") catch {};
+    read_thread.setName(global.io(), "io-reader") catch {};
 
     // Update all mutable thread-local exec data.
     data.start = try std.time.Instant.now();
