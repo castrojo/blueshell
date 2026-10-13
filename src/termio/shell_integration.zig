@@ -48,7 +48,8 @@ pub fn setup(
     /// When running inside a sandbox (e.g. Flatpak), resource_dir is the
     /// in-sandbox path used for file existence checks. host_resource_dir is
     /// the path accessible from the host subprocess (used for env vars like
-    /// ENV). Pass null when not sandboxed; the resource_dir is used for both.
+    /// ENV, ZDOTDIR, XDG_DATA_DIRS). Pass null when not sandboxed; the
+    /// resource_dir is used for both.
     host_resource_dir: ?[]const u8,
 ) !?ShellIntegration {
     const shell: Shell = force_shell orelse
@@ -68,6 +69,7 @@ pub fn setup(
             alloc_arena,
             command,
             resource_dir,
+            host_resource_dir orelse resource_dir,
             env,
         ),
 
@@ -75,11 +77,17 @@ pub fn setup(
             alloc_arena,
             command,
             resource_dir,
+            host_resource_dir orelse resource_dir,
             env,
         ),
 
         .elvish, .fish => xdg: {
-            if (!try setupXdgDataDirs(alloc_arena, resource_dir, env)) return null;
+            if (!try setupXdgDataDirs(
+                alloc_arena,
+                resource_dir,
+                host_resource_dir orelse resource_dir,
+                env,
+            )) return null;
             break :xdg try command.clone(alloc_arena);
         },
     } orelse return null;
@@ -437,7 +445,7 @@ test "bash" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    const command = try setupBash(alloc, .{ .shell = "bash" }, res.path, &env);
+    const command = try setupBash(alloc, .{ .shell = "bash" }, res.path, res.path, &env);
     try testing.expectEqualStrings("bash --posix", command.?.shell);
     try testing.expectEqualStrings("1", env.get("GHOSTTY_BASH_INJECT").?);
 
@@ -469,7 +477,7 @@ test "bash: unsupported options" {
         var env = EnvMap.init(alloc);
         defer env.deinit();
 
-        try testing.expect(try setupBash(alloc, .{ .shell = cmdline }, res.path, &env) == null);
+        try testing.expect(try setupBash(alloc, .{ .shell = cmdline }, res.path, res.path, &env) == null);
         try testing.expectEqual(0, env.count());
     }
 }
@@ -488,7 +496,7 @@ test "bash: inject flags" {
         var env = EnvMap.init(alloc);
         defer env.deinit();
 
-        const command = try setupBash(alloc, .{ .shell = "bash --norc" }, res.path, &env);
+        const command = try setupBash(alloc, .{ .shell = "bash --norc" }, res.path, res.path, &env);
         try testing.expectEqualStrings("bash --posix", command.?.shell);
         try testing.expectEqualStrings("1 --norc", env.get("GHOSTTY_BASH_INJECT").?);
     }
@@ -498,7 +506,7 @@ test "bash: inject flags" {
         var env = EnvMap.init(alloc);
         defer env.deinit();
 
-        const command = try setupBash(alloc, .{ .shell = "bash --noprofile" }, res.path, &env);
+        const command = try setupBash(alloc, .{ .shell = "bash --noprofile" }, res.path, res.path, &env);
         try testing.expectEqualStrings("bash --posix", command.?.shell);
         try testing.expectEqualStrings("1 --noprofile", env.get("GHOSTTY_BASH_INJECT").?);
     }
@@ -518,14 +526,14 @@ test "bash: rcfile" {
 
     // bash --rcfile
     {
-        const command = try setupBash(alloc, .{ .shell = "bash --rcfile profile.sh" }, res.path, &env);
+        const command = try setupBash(alloc, .{ .shell = "bash --rcfile profile.sh" }, res.path, res.path, &env);
         try testing.expectEqualStrings("bash --posix", command.?.shell);
         try testing.expectEqualStrings("profile.sh", env.get("GHOSTTY_BASH_RCFILE").?);
     }
 
     // bash --init-file
     {
-        const command = try setupBash(alloc, .{ .shell = "bash --init-file profile.sh" }, res.path, &env);
+        const command = try setupBash(alloc, .{ .shell = "bash --init-file profile.sh" }, res.path, res.path, &env);
         try testing.expectEqualStrings("bash --posix", command.?.shell);
         try testing.expectEqualStrings("profile.sh", env.get("GHOSTTY_BASH_RCFILE").?);
     }
@@ -545,7 +553,7 @@ test "bash: HISTFILE" {
         var env = EnvMap.init(alloc);
         defer env.deinit();
 
-        _ = try setupBash(alloc, .{ .shell = "bash" }, res.path, &env);
+        _ = try setupBash(alloc, .{ .shell = "bash" }, res.path, res.path, &env);
         try testing.expect(std.mem.endsWith(u8, env.get("HISTFILE").?, ".bash_history"));
         try testing.expectEqualStrings("1", env.get("GHOSTTY_BASH_UNEXPORT_HISTFILE").?);
     }
@@ -557,7 +565,7 @@ test "bash: HISTFILE" {
 
         try env.put("HISTFILE", "my_history");
 
-        _ = try setupBash(alloc, .{ .shell = "bash" }, res.path, &env);
+        _ = try setupBash(alloc, .{ .shell = "bash" }, res.path, res.path, &env);
         try testing.expectEqualStrings("my_history", env.get("HISTFILE").?);
         try testing.expect(env.get("GHOSTTY_BASH_UNEXPORT_HISTFILE") == null);
     }
@@ -577,7 +585,7 @@ test "bash: ENV" {
 
     try env.put("ENV", "env.sh");
 
-    _ = try setupBash(alloc, .{ .shell = "bash" }, res.path, &env);
+    _ = try setupBash(alloc, .{ .shell = "bash" }, res.path, res.path, &env);
     try testing.expectEqualStrings("env.sh", env.get("GHOSTTY_BASH_ENV").?);
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -601,13 +609,13 @@ test "bash: additional arguments" {
 
     // "-" argument separator
     {
-        const command = try setupBash(alloc, .{ .shell = "bash - --arg file1 file2" }, res.path, &env);
+        const command = try setupBash(alloc, .{ .shell = "bash - --arg file1 file2" }, res.path, res.path, &env);
         try testing.expectEqualStrings("bash --posix - --arg file1 file2", command.?.shell);
     }
 
     // "--" argument separator
     {
-        const command = try setupBash(alloc, .{ .shell = "bash -- --arg file1 file2" }, res.path, &env);
+        const command = try setupBash(alloc, .{ .shell = "bash -- --arg file1 file2" }, res.path, res.path, &env);
         try testing.expectEqualStrings("bash --posix -- --arg file1 file2", command.?.shell);
     }
 }
@@ -627,7 +635,7 @@ test "bash: missing resources" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    try testing.expect(try setupBash(alloc, .{ .shell = "bash" }, resources_dir, &env) == null);
+    try testing.expect(try setupBash(alloc, .{ .shell = "bash" }, resources_dir, resources_dir, &env) == null);
     try testing.expectEqual(0, env.count());
 }
 
@@ -641,21 +649,33 @@ test "bash: missing resources" {
 fn setupXdgDataDirs(
     alloc: Allocator,
     resource_dir: []const u8,
+    host_resource_dir: []const u8,
     env: *EnvMap,
 ) !bool {
+    // The existence check uses the in-sandbox resource_dir, but the env
+    // values use host_resource_dir: the subprocess may run outside the
+    // sandbox (e.g. Flatpak host-spawn) where the sandbox path is
+    // unreachable. See setupBash for the same split.
+    var check_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const check_path = try std.fmt.bufPrint(
+        &check_buf,
+        "{s}/shell-integration",
+        .{resource_dir},
+    );
+    var integ_dir = std.fs.openDirAbsolute(check_path, .{}) catch |err| {
+        log.warn("unable to open {s}: {}", .{ check_path, err });
+        return false;
+    };
+    integ_dir.close();
+
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
 
     // Get our path to the shell integration directory.
     const integ_path = try std.fmt.bufPrint(
         &path_buf,
         "{s}/shell-integration",
-        .{resource_dir},
+        .{host_resource_dir},
     );
-    var integ_dir = std.fs.openDirAbsolute(integ_path, .{}) catch |err| {
-        log.warn("unable to open {s}: {}", .{ integ_path, err });
-        return false;
-    };
-    integ_dir.close();
 
     // Set an env var so we can remove this from XDG_DATA_DIRS later.
     // This happens in the shell integration config itself. We do this
@@ -702,7 +722,7 @@ test "xdg: empty XDG_DATA_DIRS" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    try testing.expect(try setupXdgDataDirs(alloc, res.path, &env));
+    try testing.expect(try setupXdgDataDirs(alloc, res.path, res.path, &env));
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     try testing.expectEqualStrings(
@@ -732,7 +752,7 @@ test "xdg: existing XDG_DATA_DIRS" {
 
     try env.put("XDG_DATA_DIRS", "/opt/share");
 
-    try testing.expect(try setupXdgDataDirs(alloc, res.path, &env));
+    try testing.expect(try setupXdgDataDirs(alloc, res.path, res.path, &env));
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     try testing.expectEqualStrings(
@@ -760,7 +780,7 @@ test "xdg: missing resources" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    try testing.expect(!try setupXdgDataDirs(alloc, resources_dir, &env));
+    try testing.expect(!try setupXdgDataDirs(alloc, resources_dir, resources_dir, &env));
     try testing.expectEqual(0, env.count());
 }
 
@@ -774,12 +794,13 @@ fn setupNushell(
     alloc: Allocator,
     command: config.Command,
     resource_dir: []const u8,
+    host_resource_dir: []const u8,
     env: *EnvMap,
 ) !?config.Command {
     // Add our XDG_DATA_DIRS entry (for nushell/vendor/autoload/). This
     // makes our 'ghostty' module automatically available, even if any
     // of the later checks abort the rest of our automatic integration.
-    if (!try setupXdgDataDirs(alloc, resource_dir, env)) return null;
+    if (!try setupXdgDataDirs(alloc, resource_dir, host_resource_dir, env)) return null;
 
     var stack_fallback = std.heap.stackFallback(4096, alloc);
     var cmd = internal_os.shell.ShellCommandBuilder.init(stack_fallback.get());
@@ -848,7 +869,7 @@ test "nushell" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    const command = try setupNushell(alloc, .{ .shell = "nu" }, res.path, &env);
+    const command = try setupNushell(alloc, .{ .shell = "nu" }, res.path, res.path, &env);
     try testing.expectEqualStrings("nu --execute 'use ghostty *'", command.?.shell);
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -882,7 +903,7 @@ test "nushell: unsupported options" {
         var env = EnvMap.init(alloc);
         defer env.deinit();
 
-        try testing.expect(try setupNushell(alloc, .{ .shell = cmdline }, res.path, &env) == null);
+        try testing.expect(try setupNushell(alloc, .{ .shell = cmdline }, res.path, res.path, &env) == null);
         try testing.expect(env.get("XDG_DATA_DIRS") != null);
         try testing.expect(env.get("GHOSTTY_SHELL_INTEGRATION_XDG_DIR") != null);
     }
@@ -903,7 +924,7 @@ test "nushell: missing resources" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    try testing.expect(try setupNushell(alloc, .{ .shell = "nu" }, resources_dir, &env) == null);
+    try testing.expect(try setupNushell(alloc, .{ .shell = "nu" }, resources_dir, resources_dir, &env) == null);
     try testing.expectEqual(0, env.count());
 }
 
@@ -914,6 +935,7 @@ fn setupZsh(
     alloc: Allocator,
     command: config.Command,
     resource_dir: []const u8,
+    host_resource_dir: []const u8,
     env: *EnvMap,
 ) !?config.Command {
     // Preserve an existing ZDOTDIR value. We're about to overwrite it.
@@ -922,17 +944,28 @@ fn setupZsh(
     }
 
     // Set our new ZDOTDIR to point to our shell resource directory.
+    // The existence check uses the in-sandbox resource_dir, but ZDOTDIR
+    // itself uses host_resource_dir: the subprocess may run outside the
+    // sandbox (e.g. Flatpak host-spawn) where the sandbox path doesn't
+    // exist, and zsh would then skip the user's rc files entirely.
+    var check_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const check_path = try std.fmt.bufPrint(
+        &check_buf,
+        "{s}/shell-integration/zsh",
+        .{resource_dir},
+    );
+    var integ_dir = std.fs.openDirAbsolute(check_path, .{}) catch |err| {
+        log.warn("unable to open {s}: {}", .{ check_path, err });
+        return null;
+    };
+    integ_dir.close();
+
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const integ_path = try std.fmt.bufPrint(
         &path_buf,
         "{s}/shell-integration/zsh",
-        .{resource_dir},
+        .{host_resource_dir},
     );
-    var integ_dir = std.fs.openDirAbsolute(integ_path, .{}) catch |err| {
-        log.warn("unable to open {s}: {}", .{ integ_path, err });
-        return null;
-    };
-    integ_dir.close();
     try env.put("ZDOTDIR", integ_path);
 
     return try command.clone(alloc);
@@ -951,7 +984,7 @@ test "zsh" {
     var env = EnvMap.init(testing.allocator);
     defer env.deinit();
 
-    const command = try setupZsh(alloc, .{ .shell = "zsh" }, res.path, &env);
+    const command = try setupZsh(alloc, .{ .shell = "zsh" }, res.path, res.path, &env);
     try testing.expectEqualStrings("zsh", command.?.shell);
     try testing.expectEqualStrings(res.shell_path, env.get("ZDOTDIR").?);
     try testing.expect(env.get("GHOSTTY_ZSH_ZDOTDIR") == null);
@@ -972,7 +1005,7 @@ test "zsh: ZDOTDIR" {
 
     try env.put("ZDOTDIR", "$HOME/.config/zsh");
 
-    const command = try setupZsh(alloc, .{ .shell = "zsh" }, res.path, &env);
+    const command = try setupZsh(alloc, .{ .shell = "zsh" }, res.path, res.path, &env);
     try testing.expectEqualStrings("zsh", command.?.shell);
     try testing.expectEqualStrings(res.shell_path, env.get("ZDOTDIR").?);
     try testing.expectEqualStrings("$HOME/.config/zsh", env.get("GHOSTTY_ZSH_ZDOTDIR").?);
@@ -993,8 +1026,68 @@ test "zsh: missing resources" {
     var env = EnvMap.init(alloc);
     defer env.deinit();
 
-    try testing.expect(try setupZsh(alloc, .{ .shell = "zsh" }, resources_dir, &env) == null);
+    try testing.expect(try setupZsh(alloc, .{ .shell = "zsh" }, resources_dir, resources_dir, &env) == null);
     try testing.expectEqual(0, env.count());
+}
+
+test "zsh: host resources dir" {
+    // Simulates Flatpak: the existence check runs against the in-sandbox
+    // app path, but ZDOTDIR must point at the host path, otherwise the
+    // host zsh finds no rc files there and skips the user's ~/.zshrc.
+    const testing = std.testing;
+
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(testing.allocator, .zsh);
+    defer res.deinit();
+
+    var env = EnvMap.init(testing.allocator);
+    defer env.deinit();
+
+    // The host path is never existence-checked, only written to the env.
+    const command = try setupZsh(
+        alloc,
+        .{ .shell = "zsh" },
+        res.path,
+        "/host/resources",
+        &env,
+    );
+    try testing.expectEqualStrings("zsh", command.?.shell);
+    try testing.expectEqualStrings(
+        "/host/resources/shell-integration/zsh",
+        env.get("ZDOTDIR").?,
+    );
+}
+
+test "xdg: host resources dir" {
+    const testing = std.testing;
+
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(alloc, .fish);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    try testing.expect(try setupXdgDataDirs(
+        alloc,
+        res.path,
+        "/host/resources",
+        &env,
+    ));
+    try testing.expectEqualStrings(
+        "/host/resources/shell-integration",
+        env.get("GHOSTTY_SHELL_INTEGRATION_XDG_DIR").?,
+    );
+    try testing.expectStringStartsWith(
+        env.get("XDG_DATA_DIRS").?,
+        "/host/resources/shell-integration",
+    );
 }
 
 /// Test helper that creates a temporary resources directory with shell integration paths.
