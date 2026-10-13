@@ -3,12 +3,14 @@ const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const global_state = &@import("../global.zig").state;
 const internal_os = @import("../os/main.zig");
+const flatpak_host = @import("flatpak_host.zig");
 const cli = @import("../cli.zig");
 
 /// Location of possible themes. The order of this enum matters because it
 /// defines the priority of theme search (from top to bottom).
 pub const Location = enum {
     user, // XDG config dir
+    host_user, // Host's config dir, when sandboxed in Flatpak
     resources, // Ghostty resources dir
 
     /// Returns the directory for the given theme based on this location type.
@@ -52,6 +54,15 @@ pub const Location = enum {
                         else => return null,
                     }
                 };
+            },
+
+            .host_user => flatpak_host.path(
+                arena_alloc,
+                "ghostty/themes",
+            ) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                // Treat any other failure as "no host directory".
+                else => return null,
             },
 
             .resources => try std.fs.path.join(arena_alloc, &.{

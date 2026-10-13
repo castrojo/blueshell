@@ -208,6 +208,11 @@ parser-injection message is broadly useful for embedders.
   `@"agent-colors": bool` — the RFC #22 agent-awareness options.
 - **A changed upstream default:** `@"window-theme"` was `.auto`, we ship
   `.system`, together with the rewritten doc comment above it.
+- **Flatpak host config.** `loadDefaultFiles` now calls
+  `loadFlatpakHostFiles` first (new fn right after it) and the
+  template-creation check reads `!xdg_loaded and !host_loaded`. The
+  logic lives in the new file `src/config/flatpak_host.zig`, imported
+  as `flatpak_host` at the top of `Config.zig`.
 
 **Why it can break:** `Config.zig` is upstream's central config struct
 and one of the files upstream edits most often. Worse, the
@@ -222,18 +227,41 @@ comments. Then explicitly re-check `@"window-theme"`: it must read
 `.system`. Verify with `grep -n 'window-theme' src/config/Config.zig`
 after every rebase, whether or not the file conflicted.
 
+If `loadDefaultFiles` conflicts: keep upstream's body, then re-add the
+`const host_loaded = try self.loadFlatpakHostFiles(alloc);` line before
+the XDG load and the `and !host_loaded` in the non-macOS template
+branch. Without it the Flatpak build silently stops reading
+`~/.config/ghostty` (issue #117) — no compile error, no test failure
+outside Flatpak.
+
+---
+
+## `src/config/theme.zig` — LOW risk
+
+**What we added:** a `host_user` member of `Location` (between `user`
+and `resources`; enum order is search priority), its `dir()` branch, and
+the `flatpak_host` import. Lets user themes in the host's
+`~/.config/ghostty/themes` resolve inside Flatpak.
+
+**Resolution recipe:** re-add the enum member in that position and the
+`.host_user` switch arm. `list_themes.zig` needs no change.
+
 ---
 
 ## `src/termio/shell_integration.zig` — HIGH risk
 
 **What we added:** a `host_resource_dir: ?[]const u8` parameter on the
-public `setup()` signature, threaded into `setupBash` as a non-optional
-`host_resource_dir: []const u8`. Inside `setupBash`, the in-sandbox
-`resource_dir` is used for the file-existence check and
-`host_resource_dir` for the `ENV` value — a Flatpak-only split, because
-the subprocess may run outside the sandbox and needs a host-accessible
-path. The two upstream tests in this file gained a trailing `null`
-argument.
+public `setup()` signature, threaded into `setupBash`, `setupZsh`,
+`setupNushell`, and `setupXdgDataDirs` (fish/elvish) as a non-optional
+`host_resource_dir: []const u8`. In each, the in-sandbox `resource_dir`
+is used for the file-existence check and `host_resource_dir` for the
+env value (`ENV`, `ZDOTDIR`, `XDG_DATA_DIRS`) — a Flatpak-only split,
+because the subprocess may run outside the sandbox and needs a
+host-accessible path. Without it the host shell can't find the
+integration files; for zsh it is worse, since a bad `ZDOTDIR` makes zsh
+skip the user's `~/.zshrc` entirely (issue #117 follow-up). The direct
+unit tests pass the same dir twice; `zsh: host resources dir` and
+`xdg: host resources dir` cover the split.
 
 **Why it can break:** we changed a public function's parameter list, so
 every upstream call site of `setup()` is a patch of ours too. Any
@@ -241,9 +269,10 @@ upstream change to `setup()`, `setupBash`, or the resource-dir plumbing
 collides.
 
 **Resolution recipe:** re-add the optional parameter last on `setup()`,
-pass `host_resource_dir orelse resource_dir` down to `setupBash`, and
-keep the check-path/env-path split inside it. Fix up upstream call
-sites and the two in-file tests with `null`.
+pass `host_resource_dir orelse resource_dir` down to all four helpers,
+and keep the check-path/env-path split inside each. Fix up upstream
+call sites and the in-file tests (same dir twice, plus the two
+host-path tests).
 
 **Upstreaming:** a sandbox-aware resource dir is not BlueShell-specific
 — Ghostty's own Flatpak build has the same problem. Worth an upstream

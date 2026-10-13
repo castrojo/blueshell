@@ -98,21 +98,26 @@ refreshes it.
 
 ## 3b. Stock upstream Ghostty in the same remote
 
-The remote also carries unmodified upstream Ghostty
+The remote also carries pinned upstream Ghostty
 (`com.mitchellh.ghostty`), published by
 `.github/workflows/publish-ghostty-flatpak.yml`. That file is trigger
 policy only — the body is the same reusable
 `tuna-os/.github/.github/workflows/publish-flatpak.yml` every other
 tuna-os app calls. Three things differ from BlueShell's own publish:
 
-- It builds from a clean checkout of `ghostty-org/ghostty` (the reusable
-  workflow's `source-repo` input) using **upstream's own** manifest,
-  `dependencies.yml` and `zig-packages.json`. Nothing about the app is
-  vendored here, so upstream dependency and runtime bumps need no action
-  in this repo.
+- It builds a pinned upstream commit (a `type: git` source in the
+  repo-owned `flatpak/com.mitchellh.ghostty.yml`) with upstream's build
+  commands unchanged, plus a launcher wrapper that passes the host's
+  `~/.config/ghostty` as optional config files (Flatpak redirects
+  `XDG_CONFIG_HOME` into the sandbox — tuna-os/blueshell#117). Two
+  build files are vendored from upstream at the pinned ref
+  (`flatpak/ghostty-stock/dependencies.yml`,
+  `flatpak/ghostty-stock/zig-packages.json`); bumping the pin means
+  refreshing them, per the header comments.
 - It runs weekly (Sundays 05:00 UTC) plus `workflow_dispatch`, rather
   than on push. The reusable pipeline has no "upstream unchanged"
-  short-circuit, so every run is two full Zig builds.
+  short-circuit, so every run is two full Zig builds. Pull requests
+  touching the stock-ghostty files get a build-only validation run.
 - It publishes to `ghcr.io/tuna-os/ghostty` and gets its own index
   entry, separate from blueshell's.
 
