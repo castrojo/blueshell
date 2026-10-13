@@ -10,6 +10,7 @@
 
 const std = @import("std");
 const posix = std.posix;
+const compat_fd = @import("../../../lib/compat/fd.zig");
 
 const gio = @import("gio");
 const glib = @import("glib");
@@ -88,8 +89,8 @@ pub const Client = struct {
         const socket = gio.Socket.newFromFd(pair[0], &gerr) orelse {
             log.warn("g_socket_new_from_fd: {s}", .{gerrMsg(gerr)});
             if (gerr) |e| glib.Error.free(e);
-            posix.close(pair[0]);
-            posix.close(pair[1]);
+            compat_fd.close(pair[0]);
+            compat_fd.close(pair[1]);
             return Error.SocketWrapFailed;
         };
         defer _ = gobject.Object.unref(socket.as(gobject.Object));

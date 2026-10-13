@@ -225,9 +225,9 @@ pub fn restartSubprocess(
     self.subprocess.stop();
 
     // Full-reset the terminal so the screen is blank for the new session.
-    io.renderer_state.mutex.lock();
+    io.renderer_state.mutex.lockUncancelable(global.io());
     io.renderer_state.terminal.fullReset();
-    io.renderer_state.mutex.unlock();
+    io.renderer_state.mutex.unlock(global.io());
 
     // Start a fresh subprocess (opens new PTY and forks/execs).
     const pty_fds = try self.subprocess.start(alloc);

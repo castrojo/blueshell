@@ -1596,7 +1596,7 @@ pub const Application = extern struct {
                 log.info("smoke spawn read {d} bytes: {s}", .{ n_read, buf[0..@intCast(n_read)] });
                 return;
             }
-            std.Thread.sleep(50 * std.time.ns_per_ms);
+            std.Io.sleep(global.io(), .fromMilliseconds(50), .awake) catch {};
         }
         log.warn("smoke spawn: no output within timeout", .{});
     }
