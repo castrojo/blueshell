@@ -1,10 +1,12 @@
 name: Publish Ghostty Flatpak
 
 # Republish stock upstream Ghostty (com.mitchellh.ghostty) onto the TunaOS
-# Flatpak remote, alongside BlueShell. No TunaOS patches: the app is built
-# from a clean checkout of ghostty-org/ghostty using *upstream's own*
-# manifest, dependencies.yml and zig-packages.json, so upstream dependency
-# and runtime bumps need no change in this repo.
+# Flatpak remote, alongside BlueShell. The app is built from a pinned
+# upstream commit (see `commit:` in flatpak/com.mitchellh.ghostty.yml)
+# with one TunaOS addition: a launcher wrapper that passes the host's
+# ~/.config/ghostty as optional config files, because Flatpak redirects
+# XDG_CONFIG_HOME into the sandbox and the host config would otherwise
+# never be read (tuna-os/blueshell#117). No patches to upstream's source.
 #
 # Because the app IDs differ (com.mitchellh.ghostty vs org.tunaos.BlueShell),
 # a user can install both side by side from the one remote.
@@ -18,22 +20,29 @@ name: Publish Ghostty Flatpak
 # The body is the canonical tuna-os pipeline in tuna-os/.github, the same
 # reusable workflow finupdate, mariner, mandelbrot, dualcut and the four
 # installer frontends call. This file is only the trigger policy.
+#
+# Bumping the pinned upstream: update `commit:` in
+# flatpak/com.mitchellh.ghostty.yml, refresh the two vendored files noted
+# in flatpak/ghostty-stock-dependencies.yml, and diff the module's
+# build-commands against the new ref's own manifest. Open a PR; the
+# build-only job below validates it without publishing.
 
 on:
   schedule:
     # Sundays 05:00 UTC. Weekly rather than daily because the reusable
     # pipeline has no "upstream unchanged" short-circuit -- every run is two
     # full Zig builds (x86_64 + aarch64, ~11 min each), and a republished
-    # upstream terminal does not need same-day freshness. Dispatch the
-    # workflow to pull in a specific upstream commit sooner.
+    # upstream terminal does not need same-day freshness.
     - cron: '0 5 * * 0'
   workflow_dispatch:
-    inputs:
-      source-ref:
-        description: 'Ghostty ref to build (branch, tag or SHA). Empty = the pinned known-good ref (vars.GHOSTTY_SOURCE_REF, else the fallback in this file).'
-        required: false
-        type: string
-        default: ''
+  pull_request:
+    paths:
+      - flatpak/com.mitchellh.ghostty.yml
+      - flatpak/com.mitchellh.ghostty-debug.yml
+      - flatpak/ghostty-stock-dependencies.yml
+      - flatpak/ghostty-stock-zig-packages.json
+      - flatpak/ghostty-stock-launcher.sh
+      - .github/workflows/publish-ghostty-flatpak.yml
 
 permissions:
   contents: read
@@ -56,8 +65,8 @@ jobs:
       # successful run -- a private package fails to install exactly like a
       # missing one.
       repo-name: tuna-os/ghostty
-      source-repo: ghostty-org/ghostty
-      # Never "whatever upstream main is this Sunday". The 2026-09-20 run
+      # Pull requests only validate the build; schedule and dispatch publish.
+      # (Never "whatever upstream main is this Sunday". The 2026-09-20 run
       # built main at 27e8b3f, right after upstream replaced GtkGLArea with
       # direct EGL/dmabuf rendering. On Mesa's software renderer (every VM
       # without GPU passthrough, including Utah's install e2e) that surface
@@ -66,11 +75,11 @@ jobs:
       # err=error.NotInitialized"): no window at all. Utah's post-testing e2e
       # went red on every flavor.
       #
-      # So the scheduled run builds a pinned, known-good upstream commit. Bump
-      # it deliberately (repo variable GHOSTTY_SOURCE_REF, no PR needed) after
-      # checking the build in a VM. ef7edc4 is upstream main from
-      # 2026-09-13, which Utah's e2e passed with. A dispatch input still wins.
-      source-ref: ${{ inputs.source-ref || vars.GHOSTTY_SOURCE_REF || 'ef7edc4a24cf3ef0d6862276602e09f7b4b11b40' }}
+      # So scheduled runs build the pinned, known-good upstream commit in
+      # the manifest. Bump it deliberately via PR after checking the
+      # build-only job here and the app in a VM. The current pin is
+      # upstream main from 2026-09-13, which Utah's e2e passed with.)
+      publish: ${{ github.event_name != 'pull_request' }}
       # No bundles on the GitHub release: these are upstream's builds, and
       # this repo's releases are BlueShell's.
       attach-bundles: false

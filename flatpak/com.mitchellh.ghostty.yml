@@ -3,7 +3,11 @@ runtime: org.gnome.Platform
 runtime-version: "50"
 sdk: org.gnome.Sdk
 default-branch: tip
+
+# Runs the TunaOS launcher, which execs the real binary after adding
+# the host's ~/.config/ghostty as optional config files.
 command: ghostty
+
 finish-args:
   # 3D rendering
   - --device=dri
@@ -13,10 +17,8 @@ finish-args:
   - --share=ipc
   - --socket=fallback-x11
   - --socket=wayland
-  # Read the host's ~/.config/ghostty (config, themes) and any config-file
-  # includes in $HOME. Flatpak redirects XDG_CONFIG_HOME into
-  # ~/.var/app/<id>/config, so src/config/flatpak_host.zig loads the host
-  # config as a base layer; the sandbox-local config overrides it.
+  # The launcher reads $HOME/.config/ghostty via --config-file, so the
+  # host config users edit actually takes effect (tuna-os/blueshell#117).
   - --filesystem=home:ro
   # So we can escape the sandbox
   - --talk-name=org.freedesktop.Flatpak
@@ -32,13 +34,15 @@ cleanup:
   - "*.so"
 
 modules:
-  - dependencies.yml
+  - ghostty-stock-dependencies.yml
 
   - name: ghostty
     buildsystem: simple
     build-options:
       append-path: /app/zig
     build-commands:
+      # Upstream's own build, unchanged. Compare against the pinned ref's
+      # flatpak/com.mitchellh.ghostty.yml when bumping the pin below.
       - zig build
         -Doptimize=ReleaseFast
         -Dcpu=baseline
@@ -48,14 +52,21 @@ modules:
         --prefix /app
         --search-prefix /app
         --system $PWD/vendor/p
+      # The desktop file and `command:` both resolve to /app/bin/ghostty,
+      # so the wrapper takes that name and the real binary moves aside.
+      - mv /app/bin/ghostty /app/bin/ghostty.bin
+      - install -Dm755 ghostty-stock-launcher.sh /app/bin/ghostty
     sources:
-      - type: dir
-        path: ..
-        skip:
-          - flatpak/.flatpak-builder
-          - flatpak/builddir
-          - flatpak/repo
-          - zig-cache
-          - zig-out
+      # Pinned upstream. Bump deliberately after checking the build in a
+      # VM (see publish-ghostty-flatpak.yml); when you do, refresh the
+      # two vendored files noted in ghostty-stock-dependencies.yml.
+      - type: git
+        url: https://github.com/ghostty-org/ghostty.git
+        commit: ef7edc4a24cf3ef0d6862276602e09f7b4b11b40
 
-      - zig-packages.json
+      - type: file
+        path: ghostty-stock-zig-packages.json
+        dest-filename: zig-packages.json
+
+      - type: file
+        path: ghostty-stock-launcher.sh
