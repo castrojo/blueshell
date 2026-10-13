@@ -1480,7 +1480,7 @@ pub const Application = extern struct {
         // screenshot walkthroughs (gated on env var, off by default).
         // A value naming a page ("appearance", "behavior", "shortcuts",
         // "profiles") opens that page; any other value opens the default.
-        if (std.posix.getenv("GHOSTTY_PTYXIS_TEST_PREFS")) |page| {
+        if (global.environ().getPosix("GHOSTTY_PTYXIS_TEST_PREFS")) |page| {
             const window = PreferencesWindow.new();
             for ([_][:0]const u8{ "appearance", "behavior", "shortcuts", "profiles" }) |known| {
                 if (std.mem.eql(u8, page, known)) {
@@ -1492,7 +1492,7 @@ pub const Application = extern struct {
         }
 
         // Optional: smoke test the config-file mutator.
-        if (std.posix.getenv("GHOSTTY_PTYXIS_TEST_CONFIG_WRITE")) |val| {
+        if (global.environ().getPosix("GHOSTTY_PTYXIS_TEST_CONFIG_WRITE")) |val| {
             const cb = @import("config_bridge.zig");
             cb.setKey(std.heap.c_allocator, "background-opacity", val, null) catch |err| {
                 log.warn("config_bridge.setKey test failed: {s}", .{@errorName(err)});
@@ -1500,14 +1500,14 @@ pub const Application = extern struct {
         }
 
         // Optional: smoke test the palette applier.
-        if (std.posix.getenv("GHOSTTY_PTYXIS_TEST_PALETTE")) |id| {
+        if (global.environ().getPosix("GHOSTTY_PTYXIS_TEST_PALETTE")) |id| {
             PreferencesWindow.applyPalette(id) catch |err| {
                 log.warn("applyPalette test failed: {s}", .{@errorName(err)});
             };
         }
 
         // Optional: smoke test CreatePty via the agent.
-        if (std.posix.getenv("GHOSTTY_PTYXIS_TEST_CREATEPTY")) |_| {
+        if (global.environ().getPosix("GHOSTTY_PTYXIS_TEST_CREATEPTY")) |_| {
             const priv2 = self.private();
             if (priv2.container_client) |*c| {
                 const fd = c.createPty() catch |err| blk: {
@@ -1525,7 +1525,7 @@ pub const Application = extern struct {
         // Set GHOSTTY_PTYXIS_TEST_SPAWN to a container id (e.g. "session"
         // or a podman name) to drive: CreatePty → Container.Spawn → echo
         // a sentinel into the slave to prove it's live.
-        if (std.posix.getenv("GHOSTTY_PTYXIS_TEST_SPAWN")) |id| {
+        if (global.environ().getPosix("GHOSTTY_PTYXIS_TEST_SPAWN")) |id| {
             self.smokeSpawnFlow(id) catch |err| {
                 log.warn("spawn smoke failed: {s}", .{@errorName(err)});
             };
@@ -1634,7 +1634,7 @@ pub const Application = extern struct {
     /// then tries paths relative to the running binary (dev + installed),
     /// then well-known system install locations.
     fn resolveAgentPath(alloc: std.mem.Allocator) ![:0]u8 {
-        if (std.posix.getenv("PTYXIS_AGENT_PATH")) |p| {
+        if (global.environ().getPosix("PTYXIS_AGENT_PATH")) |p| {
             return try alloc.dupeZ(u8, p);
         }
 

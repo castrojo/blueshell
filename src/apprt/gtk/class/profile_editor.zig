@@ -250,7 +250,7 @@ pub const ProfileEditor = extern struct {
         priv.delete_row.setSelected(del_idx);
 
         // Scrollback.
-        const sb = cfg.@"scrollback-limit";
+        const sb = cfg.@"scrollback-limit-bytes".value;
         priv.limit_scrollback_row.setActive(if (sb > 0) 1 else 0);
         const sb_adj = adw.SpinRow.getAdjustment(priv.scrollback_limit_row);
         if (sb > 0) {

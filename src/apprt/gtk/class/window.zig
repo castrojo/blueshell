@@ -9,6 +9,7 @@ const gobject = @import("gobject");
 const gtk = @import("gtk");
 
 const i18n = @import("../../../os/main.zig").i18n;
+const global = @import("../../../global.zig");
 const apprt = @import("../../../apprt.zig");
 const configpkg = @import("../../../config.zig");
 const TitlebarStyle = configpkg.Config.GtkTitlebarStyle;
@@ -2674,15 +2675,15 @@ pub const Window = extern struct {
         log.info("opened slave: {s} fd={d}", .{ slave_path, slave_fd });
 
         // Build argv: prefer the shell from $SHELL, default /bin/bash.
-        const shell = std.posix.getenv("SHELL") orelse "/bin/bash";
+        const shell = global.environ().getPosix("SHELL") orelse "/bin/bash";
         const argv = [_][]const u8{shell};
-        const cwd = std.posix.getenv("HOME") orelse "/";
+        const cwd = global.environ().getPosix("HOME") orelse "/";
 
         // Minimal env: TERM + HOME + USER + PATH.
-        const term_v = std.posix.getenv("TERM") orelse "xterm-256color";
-        const home_v = std.posix.getenv("HOME") orelse "/";
-        const user_v = std.posix.getenv("USER") orelse "user";
-        const path_v = std.posix.getenv("PATH") orelse "/usr/bin:/bin";
+        const term_v = global.environ().getPosix("TERM") orelse "xterm-256color";
+        const home_v = global.environ().getPosix("HOME") orelse "/";
+        const user_v = global.environ().getPosix("USER") orelse "user";
+        const path_v = global.environ().getPosix("PATH") orelse "/usr/bin:/bin";
         const env = [_][2][]const u8{
             .{ "TERM", term_v },
             .{ "HOME", home_v },

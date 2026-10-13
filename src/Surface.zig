@@ -1360,9 +1360,9 @@ fn childExited(self: *Surface, info: apprt.surface.Message.ChildExited) void {
         .none => return,
         .restart => {
             // Reset the terminal so it's blank for the new session.
-            self.renderer_state.mutex.lock();
+            self.renderer_state.mutex.lockUncancelable(global.io());
             self.renderer_state.terminal.fullReset();
-            self.renderer_state.mutex.unlock();
+            self.renderer_state.mutex.unlock(global.io());
 
             // Clear the exited flag so the surface is usable again.
             self.child_exited = false;

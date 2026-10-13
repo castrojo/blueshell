@@ -207,7 +207,10 @@ pub fn restartSubprocess(
     const data = &td.backend.exec;
 
     // Stop the PTY reader: write a byte to the quit pipe, then join.
-    _ = posix.write(data.read_thread_pipe, "x") catch {};
+    switch (posix.errno(posix.system.write(data.read_thread_pipe, "x", 1))) {
+        .SUCCESS, .PIPE => {},
+        else => {},
+    }
     data.read_thread.join();
     posix.close(data.read_thread_pipe);
 

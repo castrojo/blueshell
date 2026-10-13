@@ -2504,8 +2504,8 @@ pub const Surface = extern struct {
         // Sample the viewport for output activity and prompt-like text.
         const alloc = Application.default().allocator();
         const dump: []const u8 = dump: {
-            core_surface.renderer_state.mutex.lock();
-            defer core_surface.renderer_state.mutex.unlock();
+            core_surface.renderer_state.mutex.lockUncancelable(global.io());
+            defer core_surface.renderer_state.mutex.unlock(global.io());
             const screen = core_surface.renderer_state.terminal.screens.active;
             break :dump screen.dumpStringAlloc(
                 alloc,
@@ -2574,7 +2574,7 @@ pub const Surface = extern struct {
             std.os.linux.T.IOCGPGRP,
             @intFromPtr(&pgrp),
         );
-        if (std.os.linux.E.init(rc) != .SUCCESS) return null;
+        if (rc != 0) return null;
         if (pgrp <= 0) return null;
 
         var comm_buf: [64]u8 = undefined;

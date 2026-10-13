@@ -31,17 +31,28 @@ pub const reset_sequences = "\x1b]104\x07\x1b]110\x07\x1b]111\x07\x1b]112\x07";
 pub fn buildApplySequences(alloc: Allocator, variant: *const palette_mod.Variant) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(alloc);
-    const w = out.writer(alloc);
+    const print = struct {
+        fn print(
+            a: Allocator,
+            o: *std.ArrayList(u8),
+            comptime fmt: []const u8,
+            args: anytype,
+        ) !void {
+            const s = try std.fmt.allocPrint(a, fmt, args);
+            defer a.free(s);
+            try o.appendSlice(a, s);
+        }
+    }.print;
 
     if (variant.background) |c|
-        try w.print("\x1b]11;#{x:0>2}{x:0>2}{x:0>2}\x07", .{ c.r, c.g, c.b });
+        try print(alloc, &out, "\x1b]11;#{x:0>2}{x:0>2}{x:0>2}\x07", .{ c.r, c.g, c.b });
     if (variant.foreground) |c|
-        try w.print("\x1b]10;#{x:0>2}{x:0>2}{x:0>2}\x07", .{ c.r, c.g, c.b });
+        try print(alloc, &out, "\x1b]10;#{x:0>2}{x:0>2}{x:0>2}\x07", .{ c.r, c.g, c.b });
     if (variant.cursor) |c|
-        try w.print("\x1b]12;#{x:0>2}{x:0>2}{x:0>2}\x07", .{ c.r, c.g, c.b });
+        try print(alloc, &out, "\x1b]12;#{x:0>2}{x:0>2}{x:0>2}\x07", .{ c.r, c.g, c.b });
     for (variant.colors, 0..) |maybe, i| {
         const c = maybe orelse continue;
-        try w.print("\x1b]4;{d};#{x:0>2}{x:0>2}{x:0>2}\x07", .{ i, c.r, c.g, c.b });
+        try print(alloc, &out, "\x1b]4;{d};#{x:0>2}{x:0>2}{x:0>2}\x07", .{ i, c.r, c.g, c.b });
     }
 
     return try out.toOwnedSlice(alloc);
