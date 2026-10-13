@@ -891,11 +891,12 @@ pub const PreferencesWindow = extern struct {
         // Mouse hide while typing.
         priv.mouse_hide_while_typing_row.setActive(if (cfg.@"mouse-hide-while-typing") 1 else 0);
 
-        // Copy on select: false=0, true=1, clipboard=2.
+        // Copy on select: none=0, primary=1, clipboard=2, both=3.
         priv.copy_on_select_row.setSelected(switch (cfg.@"copy-on-select") {
-            .false => 0,
-            .true => 1,
+            .none => 0,
+            .primary => 1,
             .clipboard => 2,
+            .both => 3,
         });
 
         // Shell integration: detect=0, none=1, bash=2, elvish=3, fish=4, nushell=5, zsh=6.
