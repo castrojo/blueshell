@@ -96,7 +96,7 @@ flatpak install tuna-os com.mitchellh.ghostty
 ```
 
 The manifest is owned by this repo
-(`flatpak/com.mitchellh.ghostty.yml`): it builds a pinned upstream
+(`flatpak/ghostty-stock/com.mitchellh.ghostty.yml`): it builds a pinned upstream
 commit (a `type: git` source) with upstream's build commands unchanged,
 plus one TunaOS addition — a launcher wrapper that passes the host's
 `~/.config/ghostty` as optional config files, since Flatpak redirects
@@ -105,8 +105,8 @@ to upstream's source. The workflow file is trigger policy only; the body
 is the canonical reusable pipeline in `tuna-os/.github`.
 
 The price of the wrapper is two vendored files
-(`flatpak/ghostty-stock-dependencies.yml`,
-`flatpak/ghostty-stock-zig-packages.json`), copied from upstream at the
+(`flatpak/ghostty-stock/dependencies.yml`,
+`flatpak/ghostty-stock/zig-packages.json`), copied from upstream at the
 pinned ref. Bumping the pin means refreshing them and diffing the
 build-commands against the new ref's own manifest — the header comments
 on each file say exactly how. Pull requests touching any of these files

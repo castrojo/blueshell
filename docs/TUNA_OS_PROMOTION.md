@@ -111,8 +111,8 @@ tuna-os app calls. Three things differ from BlueShell's own publish:
   `~/.config/ghostty` as optional config files (Flatpak redirects
   `XDG_CONFIG_HOME` into the sandbox — tuna-os/blueshell#117). Two
   build files are vendored from upstream at the pinned ref
-  (`flatpak/ghostty-stock-dependencies.yml`,
-  `flatpak/ghostty-stock-zig-packages.json`); bumping the pin means
+  (`flatpak/ghostty-stock/dependencies.yml`,
+  `flatpak/ghostty-stock/zig-packages.json`); bumping the pin means
   refreshing them, per the header comments.
 - It runs weekly (Sundays 05:00 UTC) plus `workflow_dispatch`, rather
   than on push. The reusable pipeline has no "upstream unchanged"

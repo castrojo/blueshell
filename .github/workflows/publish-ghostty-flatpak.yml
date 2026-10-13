@@ -22,10 +22,10 @@ name: Publish Ghostty Flatpak
 # installer frontends call. This file is only the trigger policy.
 #
 # Bumping the pinned upstream: update `commit:` in
-# flatpak/com.mitchellh.ghostty.yml, refresh the two vendored files noted
-# in flatpak/ghostty-stock-dependencies.yml, and diff the module's
-# build-commands against the new ref's own manifest. Open a PR; the
-# build-only job below validates it without publishing.
+# flatpak/ghostty-stock/com.mitchellh.ghostty.yml, refresh the two
+# vendored files noted in flatpak/ghostty-stock/dependencies.yml, and
+# diff the module's build-commands against the new ref's own manifest.
+# Open a PR; the build-only job below validates it without publishing.
 
 on:
   schedule:
@@ -37,11 +37,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - flatpak/com.mitchellh.ghostty.yml
-      - flatpak/com.mitchellh.ghostty-debug.yml
-      - flatpak/ghostty-stock-dependencies.yml
-      - flatpak/ghostty-stock-zig-packages.json
-      - flatpak/ghostty-stock-launcher.sh
+      - flatpak/ghostty-stock/**
       - .github/workflows/publish-ghostty-flatpak.yml
 permissions:
   # Must cover the reusable workflow's own block (contents: write,
@@ -59,7 +55,7 @@ jobs:
     uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@main
     with:
       app-id: com.mitchellh.ghostty
-      manifest-path: flatpak/com.mitchellh.ghostty.yml
+      manifest-path: flatpak/ghostty-stock/com.mitchellh.ghostty.yml
       # Registry path and central-index entry, deliberately not this repo:
       # ghcr.io/tuna-os/ghostty, so it doesn't collide with blueshell's own
       # entry. The package is created under the org by this repo's

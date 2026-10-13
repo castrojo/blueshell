@@ -34,7 +34,7 @@ cleanup:
   - "*.so"
 
 modules:
-  - ghostty-stock-dependencies.yml
+  - dependencies.yml
 
   - name: ghostty
     buildsystem: simple
@@ -55,18 +55,18 @@ modules:
       # The desktop file and `command:` both resolve to /app/bin/ghostty,
       # so the wrapper takes that name and the real binary moves aside.
       - mv /app/bin/ghostty /app/bin/ghostty.bin
-      - install -Dm755 ghostty-stock-launcher.sh /app/bin/ghostty
+      - install -Dm755 launcher.sh /app/bin/ghostty
     sources:
       # Pinned upstream. Bump deliberately after checking the build in a
       # VM (see publish-ghostty-flatpak.yml); when you do, refresh the
-      # two vendored files noted in ghostty-stock-dependencies.yml.
+      # two vendored files noted in dependencies.yml.
       - type: git
         url: https://github.com/ghostty-org/ghostty.git
         commit: ef7edc4a24cf3ef0d6862276602e09f7b4b11b40
 
-      - type: file
-        path: ghostty-stock-zig-packages.json
-        dest-filename: zig-packages.json
+      # Must be named exactly zig-packages.json: flatpak-builder only
+      # downloads and unpacks the listed archives for that filename.
+      - zig-packages.json
 
       - type: file
-        path: ghostty-stock-launcher.sh
+        path: launcher.sh

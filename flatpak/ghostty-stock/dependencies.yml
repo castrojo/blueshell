@@ -3,8 +3,8 @@
 # (ef7edc4a24cf3ef0d6862276602e09f7b4b11b40).
 #
 # When bumping the pin: copy flatpak/dependencies.yml from the new ref
-# over this file, and do the same for ghostty-stock-zig-packages.json.
-# Then diff the ghostty module's build-commands against the new ref's
+# over this file, and do the same for zig-packages.json. Then diff the
+# ghostty module's build-commands against the new ref's
 # flatpak/com.mitchellh.ghostty.yml in case upstream changed how it
 # builds.
 
