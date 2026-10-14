@@ -22,7 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ZIG_VERSION: 0.15.2
+  # Must track build.zig.zon minimum_zig_version (upstream bumped to
+  # 0.16.0; the 0.15 toolchain fails every build with a version error).
+  ZIG_VERSION: 0.16.0
 
 jobs:
   test:

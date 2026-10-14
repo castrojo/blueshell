@@ -274,6 +274,20 @@ and keep the check-path/env-path split inside each. Fix up upstream
 call sites and the in-file tests (same dir twice, plus the two
 host-path tests).
 
+**2026-10 upstream Io refactor:** upstream replaced `std.fs.*` file APIs
+with `std.Io.Dir.*(global.io(), …)`, `EnvMap` with
+`std.process.Environ.Map`, and deleted `src/os/env.zig`. Our
+`setupBash`/`setupZsh`/`setupXdgDataDirs` splits had to be re-expressed
+on the new calls (`openFileAbsolute`/`openDirAbsolute` take `global.io()`
+first, `close` takes it too, `env.remove` is now
+`env.swapRemove`); the new fork files `profile_store.zig`,
+`config_bridge.zig`, and `flatpak_host.zig` needed the same port and —
+being new files — never conflicted, so they fail at compile time
+instead. After any rebase, grep fork-owned files for
+`std.fs.openFileAbsolute`, `std.fs.max_path_bytes`, `getEnvMap`, and
+`os/env.zig` imports. (Also: 0.16 `zig fmt` rejects a trailing `;`
+after an if/else statement.)
+
 **Upstreaming:** a sandbox-aware resource dir is not BlueShell-specific
 — Ghostty's own Flatpak build has the same problem. Worth an upstream
 issue.

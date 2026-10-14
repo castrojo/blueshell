@@ -11,6 +11,7 @@ const terminalpkg = @import("../terminal/main.zig");
 const Benchmark = @import("Benchmark.zig");
 const options = @import("options.zig");
 const Terminal = terminalpkg.Terminal;
+const global = @import("../global.zig");
 
 const log = std.log.scoped(.@"terminal-stream-bench");
 
@@ -20,6 +21,10 @@ terminal: Terminal,
 pub const Options = struct {
     /// The type of codepoint width calculation to use.
     mode: Mode = .clone,
+
+    /// Multiplier on the number of iterations each step runs. This is
+    /// useful to make a benchmark run long enough for profiling.
+    loops: u32 = 1,
 
     /// The size of the terminal. This affects benchmarking when
     /// dealing with soft line wrapping and the memory impact
@@ -48,7 +53,70 @@ pub const Mode = enum {
 
     /// RenderState rather than a screen clone.
     render,
+
+    /// Like render, but only the portion of the render state update
+    /// that requires holding a terminal lock (beginUpdate). The
+    /// deferred work (endUpdate) is excluded since it happens outside
+    /// of any locks.
+    @"render-locked",
+
+    /// RenderState update with no changes to the terminal. This is
+    /// the common case for a renderer that is redrawing frames (e.g.
+    /// cursor blink, mouse movement) without terminal changes.
+    @"render-clean",
+
+    /// RenderState update where a single row is dirty. This models the
+    /// common case of a shell prompt or TUI updating a small portion
+    /// of the screen between frames.
+    @"render-partial",
+
+    /// RenderState update after scrolling the viewport by one row.
+    /// This is the per-frame cost of user-driven scrolling through
+    /// scrollback (e.g. a trackpad fling), which today changes the
+    /// viewport pin and forces a full rebuild.
+    @"render-scroll",
+
+    /// RenderState update after scrolling the viewport by half a
+    /// screen. This models paging (page up/down, wheel ticks with
+    /// large multipliers) rather than smooth scrolling.
+    @"render-scroll-page",
+
+    /// RenderState update after one new line of output is written
+    /// while the viewport follows the active area. This models a
+    /// program streaming output. Each frame the viewport pin moves
+    /// down one row.
+    @"render-output",
+
+    /// The render-scroll, render-output, and render-clean modes with
+    /// overscan (`RenderState.overscan_request`) of 4 rows above and 1
+    /// below. This models a renderer that captures extra rows so it can
+    /// draw partially visible rows while smooth scrolling.
+    @"render-scroll-overscan",
+    @"render-output-overscan",
+    @"render-clean-overscan",
 };
+
+/// The overscan request used by the overscan modes.
+const bench_overscan: terminalpkg.RenderState.Overscan = .{ .above = 4, .below = 1 };
+
+/// The overscan request for the given mode.
+fn overscanRequest(mode: Mode) terminalpkg.RenderState.Overscan {
+    return switch (mode) {
+        .@"render-scroll-overscan",
+        .@"render-output-overscan",
+        .@"render-clean-overscan",
+        => bench_overscan,
+        else => .{},
+    };
+}
+
+/// Number of scrollback lines written during setup so that the scroll
+/// modes have room to move in both directions.
+const scroll_setup_lines = 4000;
+
+/// Direction changes for the scroll modes, in iterations.
+const scroll_reverse_interval = 2000;
+const scroll_page_reverse_interval = 40;
 
 pub fn create(
     alloc: Allocator,
@@ -57,12 +125,25 @@ pub fn create(
     const ptr = try alloc.create(ScreenClone);
     errdefer alloc.destroy(ptr);
 
+    var terminal_opts: Terminal.Options = .{
+        .rows = opts.@"terminal-rows",
+        .cols = opts.@"terminal-cols",
+    };
+
+    // The scroll modes need real scrollback to move through. The
+    // default limit is small enough that the setup lines would be
+    // pruned immediately.
+    switch (opts.mode) {
+        .@"render-scroll",
+        .@"render-scroll-page",
+        .@"render-scroll-overscan",
+        => terminal_opts.max_scrollback_bytes = 256 * 1024 * 1024,
+        else => {},
+    }
+
     ptr.* = .{
         .opts = opts,
-        .terminal = try .init(alloc, .{
-            .rows = opts.@"terminal-rows",
-            .cols = opts.@"terminal-cols",
-        }),
+        .terminal = try .init(global.io(), alloc, terminal_opts),
     };
 
     return ptr;
@@ -79,6 +160,18 @@ pub fn benchmark(self: *ScreenClone) Benchmark {
             .noop => stepNoop,
             .clone => stepClone,
             .render => stepRender,
+            .@"render-locked" => stepRenderLocked,
+            .@"render-clean",
+            .@"render-clean-overscan",
+            => stepRenderClean,
+            .@"render-partial" => stepRenderPartial,
+            .@"render-scroll",
+            .@"render-scroll-overscan",
+            => stepRenderScroll,
+            .@"render-scroll-page" => stepRenderScrollPage,
+            .@"render-output",
+            .@"render-output-overscan",
+            => stepRenderOutput,
         },
         .setupFn = setup,
         .teardownFn = teardown,
@@ -95,11 +188,22 @@ fn setup(ptr: *anyopaque) Benchmark.Error!void {
     var s = self.terminal.vtStream();
     defer s.deinit();
     s.nextSlice("\x1b[48;2;20;40;60m");
+
+    // The scroll modes need scrollback above the screen so the
+    // viewport has somewhere to go.
+    switch (self.opts.mode) {
+        .@"render-scroll",
+        .@"render-scroll-page",
+        .@"render-scroll-overscan",
+        => for (0..scroll_setup_lines) |_| s.nextSlice("hello\r\n"),
+        else => {},
+    }
+
     for (0..self.terminal.rows - 1) |_| s.nextSlice("hello\r\n");
     s.nextSlice("hello");
 
     // Setup our terminal state
-    const data_f: std.fs.File = (options.dataFile(
+    const data_f: std.Io.File = (options.dataFile(
         self.opts.data,
     ) catch |err| {
         log.warn("error opening data file err={}", .{err});
@@ -110,7 +214,7 @@ fn setup(ptr: *anyopaque) Benchmark.Error!void {
     defer stream.deinit();
 
     var read_buf: [4096]u8 align(std.atomic.cache_line) = undefined;
-    var f_reader = data_f.reader(&read_buf);
+    var f_reader = data_f.reader(global.io(), &read_buf);
     const r = &f_reader.interface;
 
     var buf: [4096]u8 = undefined;
@@ -148,6 +252,7 @@ fn stepClone(ptr: *anyopaque) Benchmark.Error!void {
     for (0..1000) |_| {
         const s: *terminalpkg.Screen = self.terminal.screens.active;
         const copy = s.clone(
+            s.io,
             s.alloc,
             .{ .viewport = .{} },
             null,
@@ -178,16 +283,173 @@ fn stepRender(ptr: *anyopaque) Benchmark.Error!void {
 
     // We loop because its so fast that a single benchmark run doesn't
     // properly capture our speeds.
-    for (0..1000) |_| {
+    for (0..50_000 * @as(u64, self.opts.loops)) |_| {
         // Forces a full rebuild because it thinks our screen changed
         state.screen = .alternate;
         state.update(alloc, &self.terminal) catch |err| {
             log.warn("error cloning screen err={}", .{err});
             return error.BenchmarkFailed;
         };
-        std.mem.doNotOptimizeAway(state);
+        std.mem.doNotOptimizeAway(&state);
 
         // Note: we purposely do not free memory because we don't want
         // to benchmark that. We'll free when the benchmark exits.
+    }
+}
+
+fn stepRenderLocked(ptr: *anyopaque) Benchmark.Error!void {
+    const self: *ScreenClone = @ptrCast(@alignCast(ptr));
+
+    // We do this once out of the loop because a significant slowdown
+    // on the first run is allocation. After that first run, even with
+    // a full rebuild, it is much faster. Let's ignore that first run
+    // slowdown.
+    const alloc = self.terminal.screens.active.alloc;
+    var state: terminalpkg.RenderState = .empty;
+    state.update(alloc, &self.terminal) catch |err| {
+        log.warn("error cloning screen err={}", .{err});
+        return error.BenchmarkFailed;
+    };
+
+    // We loop because its so fast that a single benchmark run doesn't
+    // properly capture our speeds.
+    for (0..50_000 * @as(u64, self.opts.loops)) |_| {
+        // Forces a full rebuild because it thinks our screen changed
+        state.screen = .alternate;
+        state.beginUpdate(alloc, &self.terminal) catch |err| {
+            log.warn("error cloning screen err={}", .{err});
+            return error.BenchmarkFailed;
+        };
+        std.mem.doNotOptimizeAway(&state);
+
+        // Note: we purposely do not free memory because we don't want
+        // to benchmark that. We'll free when the benchmark exits.
+    }
+}
+
+fn stepRenderClean(ptr: *anyopaque) Benchmark.Error!void {
+    const self: *ScreenClone = @ptrCast(@alignCast(ptr));
+
+    // Initial update so that subsequent updates are clean (nothing
+    // dirty, no rebuilds).
+    const alloc = self.terminal.screens.active.alloc;
+    var state: terminalpkg.RenderState = .empty;
+    state.overscan_request = overscanRequest(self.opts.mode);
+    state.update(alloc, &self.terminal) catch |err| {
+        log.warn("error cloning screen err={}", .{err});
+        return error.BenchmarkFailed;
+    };
+
+    // We loop because its so fast that a single benchmark run doesn't
+    // properly capture our speeds.
+    for (0..3_000_000 * @as(u64, self.opts.loops)) |_| {
+        state.update(alloc, &self.terminal) catch |err| {
+            log.warn("error cloning screen err={}", .{err});
+            return error.BenchmarkFailed;
+        };
+        std.mem.doNotOptimizeAway(&state);
+    }
+}
+
+fn stepRenderPartial(ptr: *anyopaque) Benchmark.Error!void {
+    const self: *ScreenClone = @ptrCast(@alignCast(ptr));
+
+    // Initial update so that subsequent updates are incremental.
+    const alloc = self.terminal.screens.active.alloc;
+    var state: terminalpkg.RenderState = .empty;
+    state.update(alloc, &self.terminal) catch |err| {
+        log.warn("error cloning screen err={}", .{err});
+        return error.BenchmarkFailed;
+    };
+
+    // Grab a pin roughly in the middle of the active area that we
+    // dirty on every iteration to simulate a small screen update.
+    const pages = &self.terminal.screens.active.pages;
+    const pin = pages.pin(.{ .active = .{
+        .x = 0,
+        .y = self.terminal.rows / 2,
+    } }).?;
+
+    // We loop because its so fast that a single benchmark run doesn't
+    // properly capture our speeds.
+    for (0..2_000_000 * @as(u64, self.opts.loops)) |_| {
+        // Mark a single row dirty. `update` clears this so each
+        // iteration rebuilds exactly one row.
+        pin.markDirty();
+        state.update(alloc, &self.terminal) catch |err| {
+            log.warn("error cloning screen err={}", .{err});
+            return error.BenchmarkFailed;
+        };
+        std.mem.doNotOptimizeAway(&state);
+    }
+}
+
+fn stepRenderScroll(ptr: *anyopaque) Benchmark.Error!void {
+    const self: *ScreenClone = @ptrCast(@alignCast(ptr));
+    try renderScrollLoop(self, 1, scroll_reverse_interval);
+}
+
+fn stepRenderScrollPage(ptr: *anyopaque) Benchmark.Error!void {
+    const self: *ScreenClone = @ptrCast(@alignCast(ptr));
+    try renderScrollLoop(
+        self,
+        @intCast(@max(1, self.terminal.rows / 2)),
+        scroll_page_reverse_interval,
+    );
+}
+
+/// Scroll the viewport by `step` rows per iteration, reversing
+/// direction every `interval` iterations, and update the render state
+/// after each scroll. The viewport starts at the bottom, so the first
+/// stretch scrolls up into scrollback.
+fn renderScrollLoop(
+    self: *ScreenClone,
+    step: isize,
+    interval: usize,
+) Benchmark.Error!void {
+    const alloc = self.terminal.screens.active.alloc;
+    var state: terminalpkg.RenderState = .empty;
+    state.overscan_request = overscanRequest(self.opts.mode);
+    state.update(alloc, &self.terminal) catch |err| {
+        log.warn("error cloning screen err={}", .{err});
+        return error.BenchmarkFailed;
+    };
+
+    var dir: isize = 1;
+    for (0..50_000 * @as(u64, self.opts.loops)) |i| {
+        if (i % interval == 0) dir = -dir;
+        self.terminal.scrollViewport(.{ .delta = dir * step });
+        state.update(alloc, &self.terminal) catch |err| {
+            log.warn("error cloning screen err={}", .{err});
+            return error.BenchmarkFailed;
+        };
+        std.mem.doNotOptimizeAway(&state);
+    }
+}
+
+fn stepRenderOutput(ptr: *anyopaque) Benchmark.Error!void {
+    const self: *ScreenClone = @ptrCast(@alignCast(ptr));
+
+    const alloc = self.terminal.screens.active.alloc;
+    var state: terminalpkg.RenderState = .empty;
+    state.overscan_request = overscanRequest(self.opts.mode);
+    state.update(alloc, &self.terminal) catch |err| {
+        log.warn("error cloning screen err={}", .{err});
+        return error.BenchmarkFailed;
+    };
+
+    // Make sure the viewport follows the active area so each line
+    // written moves the viewport.
+    self.terminal.scrollViewport(.bottom);
+
+    var stream = self.terminal.vtStream();
+    defer stream.deinit();
+    for (0..50_000 * @as(u64, self.opts.loops)) |_| {
+        stream.nextSlice("hello\r\n");
+        state.update(alloc, &self.terminal) catch |err| {
+            log.warn("error cloning screen err={}", .{err});
+            return error.BenchmarkFailed;
+        };
+        std.mem.doNotOptimizeAway(&state);
     }
 }

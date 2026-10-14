@@ -40,14 +40,17 @@ template $GhosttyWindow: Adw.ApplicationWindow {
         visible: bind template.headerbar-visible;
 
         title-widget: Adw.WindowTitle {
-          title: bind template.title;
+          title: bind $computed_title(template.config, template.title, template.title-override) as <string>;
           // Blueprint auto-formatter won't let me split this into multiple
           // lines. Let me explain myself. All parameters to a closure are used
           // as notifications to recompute the value of the closure. All
           // elements of a property chain are also subscribed to for changes.
           // This one long, ugly line saves us from manually building up this
           // massive notify chain in code.
-          subtitle: bind $computed_subtitle(template.config, tab_view.selected-page.child as <$GhosttyTab>.active-surface as <$GhosttySurface>.pwd) as <string>;
+          subtitle: bind $computed_subtitle(
+            template.config,
+            tab_view.selected-page.child as <$GhosttyTab>.active-surface as <$GhosttySurface>.pwd
+            ) as <string>;
         };
 
         [start]
@@ -197,6 +200,7 @@ menu split_menu {
 // Shortcuts, About. Ghostty extras (Copy, Paste, Splits, Command
 // Palette, Inspector) are reachable via the right-click context menu
 // and the command palette — they're not in this hamburger to keep the
+
 
 menu tab_context_menu {
   item {

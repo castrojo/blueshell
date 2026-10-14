@@ -51,6 +51,16 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         self.toolbar = toolbar
         toolbarStyle = .unifiedCompact
     }
+    // Called after new tab finishes adjusting and setupTabBar is called in order to prevent Tab Bar hiding/size bug that occurs with some interactions with Mac UI
+    override func syncAppearance(_ surfaceConfig: Ghostty.SurfaceView.DerivedConfig) {
+        super.syncAppearance(surfaceConfig)
+        DispatchQueue.main.async {
+            // HACK: wait a tick before doing anything, to avoid edge cases during startup... :/
+            // If we don't do this then on launch windows with restored state with tabs will end
+            // up with messed up tab bars that don't show all tabs.
+            self.setupTabBar()
+        }
+    }
 
     override func becomeMain() {
         super.becomeMain()
@@ -154,7 +164,9 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         }
 
         // Find our clip view
-        guard let clipView = tabBarView.firstSuperview(withClassName: "NSTitlebarAccessoryClipView") else { return }
+        // macOS 26: NSTitlebarAccessoryClipView
+        // macOS 27(beta 2): NSTitlebarAccessoryContainerView
+        guard let clipView = tabBarView.firstSuperview(withClassName: "NSTitlebarAccessoryClipView") ?? tabBarView.firstSuperview(withClassName: "NSTitlebarAccessoryContainerView") else { return }
         guard let accessoryView = clipView.subviews[safe: 0] else { return }
         guard let toolbarView = titlebarView.firstDescendant(withClassName: "NSToolbarView") else { return }
 
@@ -191,6 +203,14 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
         clipView.needsLayout = true
         accessoryView.needsLayout = true
+
+        if #available(macOS 27.0, *) {
+            // Add some delay to cover the case where:
+            // AppKit resets the style after exiting fullscreen
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { [weak self] in
+                self?.reduceTabBarBackgroundGoldenGate()
+            }
+        }
 
         // Setup an observer for the NSTabBar frame. When system appearance changes or
         // other events occur, the tab bar can resize and clear our constraints. When this

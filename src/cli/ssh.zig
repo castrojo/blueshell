@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const cli_args = @import("args.zig");
@@ -6,7 +7,8 @@ const diagnostics = @import("diagnostics.zig");
 const Action = @import("ghostty.zig").Action;
 const DiskCache = @import("ssh_cache.zig").DiskCache;
 const internal_os = @import("../os/main.zig");
-const ghostty_terminfo = @import("../terminfo/main.zig").ghostty;
+const terminfopkg = @import("../terminfo/main.zig");
+const global = @import("../global.zig");
 
 const log = std.log.scoped(.ssh);
 
@@ -126,9 +128,9 @@ pub const Options = struct {
 ///      forwarding to succeed.
 ///
 ///   2. **Terminfo install** (`--terminfo`). On the first connection to a
-///      given destination, installs Ghostty's terminfo entry on the remote
-///      host using `infocmp -x xterm-ghostty | ssh tic -x -` over a
-///      shared `ControlMaster` connection. Successful installs are cached
+///      given destination, installs Ghostty's embedded terminfo entry on the
+///      remote host using `ssh tic -x -` over a shared `ControlMaster`
+///      connection. Successful installs are cached
 ///      (see `ghostty +ssh-cache`) so subsequent connections skip this
 ///      step. When terminfo is successfully installed or already cached,
 ///      `TERM` is set to `xterm-ghostty` instead of `xterm-256color`.
@@ -160,17 +162,17 @@ pub const Options = struct {
 ///
 /// Examples:
 ///
-///   # Basic invocation using defaults:
-///   ghostty +ssh user@example.com
+///     # Basic invocation using defaults:
+///     ghostty +ssh user@example.com
 ///
-///   # Forward Ghostty env vars but skip the terminfo install:
-///   ghostty +ssh --terminfo=false user@example.com
+///     # Forward Ghostty env vars but skip the terminfo install:
+///     ghostty +ssh --terminfo=false user@example.com
 ///
-///   # `ssh` flags (short-form `-p`, etc.) pass through unchanged:
-///   ghostty +ssh -p 2222 -i ~/.ssh/id_ed25519 user@example.com
+///     # `ssh` flags (short-form `-p`, etc.) pass through unchanged:
+///     ghostty +ssh -p 2222 -i ~/.ssh/id_ed25519 user@example.com
 ///
-///   # Use `--` explicitly if your ssh args might collide with our flags:
-///   ghostty +ssh -- --some-rare-ssh-arg user@example.com
+///     # Use `--` explicitly if your ssh args might collide with our flags:
+///     ghostty +ssh -- --some-rare-ssh-arg user@example.com
 ///
 /// Pass `--verbose` to see what `+ssh` is doing. For cache inspection
 /// and management, see `ghostty +ssh-cache`.
@@ -181,14 +183,14 @@ pub fn run(alloc_gpa: Allocator) !u8 {
     defer opts.deinit();
 
     {
-        var iter = try cli_args.argsIterator(alloc_gpa);
+        var iter = try cli_args.argsIterator(alloc_gpa, global.args());
         defer iter.deinit();
         try cli_args.parse(Options, alloc_gpa, &opts, &iter);
     }
 
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_file: std.fs.File = .stderr();
-    var stderr_writer = stderr_file.writer(&stderr_buffer);
+    var stderr_file: std.Io.File = .stderr();
+    var stderr_writer = stderr_file.writer(global.io(), &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
     // Any diagnostic from the arg parser is an unknown flag or bad
@@ -243,14 +245,27 @@ fn runInner(
 
         const cache: ?DiskCache = if (opts.cache) cache: {
             const path = DiskCache.defaultPath(alloc, "ghostty") catch |err| {
-                warnPrint(stderr, "ghostty terminfo cache unavailable: {}", .{err});
+                warnPrint(stderr, "ghostty terminfo cache unavailable: {t}", .{err});
                 break :session .{ .term = "xterm-256color" };
             };
             break :cache .{ .path = path };
         } else null;
 
         if (cache) |c| {
-            if (c.contains(alloc, dest) catch false) {
+            const cached = c.contains(
+                alloc,
+                dest,
+                terminfopkg.version,
+            ) catch |err| cached: {
+                if (DiskCache.isFailure(err)) warnPrint(
+                    stderr,
+                    "unable to read the cache '{s}': {t}",
+                    .{ c.path, err },
+                );
+                break :cached false;
+            };
+
+            if (cached) {
                 verbosePrint(opts, stderr, "dest: {s} (cached, skipping install)", .{dest});
                 break :session .{ .term = "xterm-ghostty" };
             } else {
@@ -264,7 +279,7 @@ fn runInner(
         stderr.flush() catch {};
 
         installRemoteTerminfo(alloc, opts, stderr) catch |err| {
-            warnPrint(stderr, "failed to install terminfo: {}", .{err});
+            warnPrint(stderr, "failed to install terminfo: {t}", .{err});
             break :session .{ .term = "xterm-256color" };
         };
         break :session .{
@@ -294,18 +309,36 @@ fn runInner(
     });
     verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
 
-    const exit_code = childExec(alloc, argv) catch |err| {
-        try stderr.print("Error: failed to run {s}: {}\n", .{ argv[0], err });
+    const exit_code = childExec(argv) catch |err| {
+        try stderr.print("Error: failed to run {s}: {t}\n", .{ argv[0], err });
         return 1;
     };
     verbosePrint(opts, stderr, "exit: {d}", .{exit_code});
 
     // Attempt to cache (if needed) on a successful ssh execution.
     if (exit_code == 0) if (session.to_cache) |entry| {
-        if (entry.cache.add(alloc, entry.dest, std.time.timestamp())) |_| {
+        if (entry.cache.add(
+            alloc,
+            entry.dest,
+            terminfopkg.version,
+            std.Io.Timestamp.now(global.io(), .real).toSeconds(),
+        )) |_| {
             verbosePrint(opts, stderr, "cache: wrote {s}", .{entry.dest});
         } else |err| {
-            log.debug("cache add failed for '{s}': {}", .{ entry.dest, err });
+            if (DiskCache.isFailure(err)) {
+                warnPrint(
+                    stderr,
+                    "unable to add '{s}' to the cache '{s}': {t}",
+                    .{ entry.dest, entry.cache.path, err },
+                );
+            } else {
+                verbosePrint(
+                    opts,
+                    stderr,
+                    "cache: skipped {s}: {t}",
+                    .{ entry.dest, err },
+                );
+            }
         }
     };
 
@@ -370,7 +403,7 @@ const Joined = struct {
 
 fn checkExit(term: std.process.Child.Term, label: []const u8) error{ChildFailed}!void {
     switch (term) {
-        .Exited => |rc| if (rc != 0) {
+        .exited => |rc| if (rc != 0) {
             log.warn("{s} exited with non-zero status: {d}", .{ label, rc });
             return error.ChildFailed;
         },
@@ -393,10 +426,11 @@ fn resolveDestination(
         &.{ ssh, "-G" },
         args,
     }) catch return null;
-    const result = std.process.Child.run(.{
-        .allocator = alloc,
-        .argv = argv,
-    }) catch |err| {
+    const result = std.process.run(
+        alloc,
+        global.io(),
+        .{ .argv = argv },
+    ) catch |err| {
         log.warn("ssh -G spawn failed: {}", .{err});
         return null;
     };
@@ -404,12 +438,15 @@ fn resolveDestination(
     return parseDestination(alloc, result.stdout);
 }
 
-/// Parse `ssh -G` output for `user` and `hostname` and return the
-/// formatted `user@hostname`. Returns null if either key is missing
-/// or formatting fails.
+/// Parse `ssh -G` output for `user`, `hostname` and `port` and return the
+/// formatted `user@hostname`, or `user@hostname:port` when the port isn't
+/// the default 22 (`user@[hostname]:port` for an IPv6 address), so that
+/// different sshd instances behind one address are cached separately.
+/// Returns null if user or hostname is missing or formatting fails.
 fn parseDestination(alloc: Allocator, stdout: []const u8) ?[]const u8 {
     var user: []const u8 = "";
     var host: []const u8 = "";
+    var port: []const u8 = "";
     var it = std.mem.tokenizeScalar(u8, stdout, '\n');
     while (it.next()) |line| {
         const space = std.mem.indexOfScalar(u8, line, ' ') orelse continue;
@@ -419,8 +456,10 @@ fn parseDestination(alloc: Allocator, stdout: []const u8) ?[]const u8 {
             user = value;
         } else if (std.mem.eql(u8, key, "hostname")) {
             host = value;
+        } else if (std.mem.eql(u8, key, "port")) {
+            port = value;
         }
-        if (user.len > 0 and host.len > 0) break;
+        if (user.len > 0 and host.len > 0 and port.len > 0) break;
     }
 
     if (user.len == 0) {
@@ -432,7 +471,14 @@ fn parseDestination(alloc: Allocator, stdout: []const u8) ?[]const u8 {
         return null;
     }
 
-    return std.fmt.allocPrint(alloc, "{s}@{s}", .{ user, host }) catch null;
+    if (port.len == 0 or std.mem.eql(u8, port, "22")) {
+        return std.fmt.allocPrint(alloc, "{s}@{s}", .{ user, host }) catch null;
+    }
+
+    if (std.mem.indexOfScalar(u8, host, ':') != null) {
+        return std.fmt.allocPrint(alloc, "{s}@[{s}]:{s}", .{ user, host, port }) catch null;
+    }
+    return std.fmt.allocPrint(alloc, "{s}@{s}:{s}", .{ user, host, port }) catch null;
 }
 
 /// Install Ghostty's terminfo on the remote host over a short-lived SSH
@@ -445,7 +491,7 @@ fn installRemoteTerminfo(
 ) !void {
     var buf: std.Io.Writer.Allocating = .init(alloc);
     defer buf.deinit();
-    try ghostty_terminfo.encode(&buf.writer);
+    try terminfopkg.ghostty.encode(&buf.writer);
     const terminfo = buf.written();
 
     // ControlPath is in TMPDIR with a short, random basename. ssh uses
@@ -463,20 +509,17 @@ fn installRemoteTerminfo(
     // the most common failure source) and inherit ssh's stderr so it
     // reaches the user's terminal. Other steps stay quiet either way.
     const remote_script = if (opts.verbose)
-        \\infocmp xterm-ghostty >/dev/null 2>&1 && exit 0
         \\command -v tic >/dev/null 2>&1 || exit 1
         \\mkdir -p ~/.terminfo 2>/dev/null && tic -x - && exit 0
         \\exit 1
     else
-        \\infocmp xterm-ghostty >/dev/null 2>&1 && exit 0
         \\command -v tic >/dev/null 2>&1 || exit 1
         \\mkdir -p ~/.terminfo 2>/dev/null && tic -x - 2>/dev/null && exit 0
         \\exit 1
     ;
 
     // Set up an SSH ControlMaster scoped to this single install:
-    //   - ControlMaster=yes makes our client also act as the master,
-    //     so `infocmp | ssh tic` runs over a single connection.
+    //   - ControlMaster=yes makes our client also act as the master.
     //   - ControlPersist=no tears the master down when our client
     //     exits; no socket lingers on the remote side.
     const argv = try std.mem.concat(alloc, []const u8, &.{
@@ -491,23 +534,23 @@ fn installRemoteTerminfo(
     });
     verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
 
-    var child: std.process.Child = .init(argv, alloc);
-    child.stdin_behavior = .Pipe;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = if (opts.verbose) .Inherit else .Ignore;
-
-    child.spawn() catch |err| {
+    var child = std.process.spawn(global.io(), .{
+        .argv = argv,
+        .stdin = .pipe,
+        .stdout = .ignore,
+        .stderr = if (opts.verbose) .inherit else .ignore,
+    }) catch |err| {
         log.warn("terminfo install spawn failed: {}", .{err});
         return error.InstallFailed;
     };
 
     if (child.stdin) |stdin| {
-        stdin.writeAll(terminfo) catch {};
-        stdin.close();
+        stdin.writeStreamingAll(global.io(), terminfo) catch {};
+        stdin.close(global.io());
         child.stdin = null;
     }
 
-    const term = child.wait() catch |err| {
+    const term = child.wait(global.io()) catch |err| {
         log.warn("terminfo install wait failed: {}", .{err});
         return error.InstallFailed;
     };
@@ -515,23 +558,24 @@ fn installRemoteTerminfo(
 }
 
 /// Returns `128 + signum` for signal-killed children, matching shell convention.
-fn childExec(alloc: Allocator, argv: []const []const u8) !u8 {
-    var child: std.process.Child = .init(argv, alloc);
-    child.stdin_behavior = .Inherit;
-    child.stdout_behavior = .Inherit;
-    child.stderr_behavior = .Inherit;
+fn childExec(argv: []const []const u8) !u8 {
+    var child = try std.process.spawn(global.io(), .{
+        .argv = argv,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    });
 
-    try child.spawn();
-    const term = try child.wait();
+    const term = try child.wait(global.io());
     return switch (term) {
-        .Exited => |rc| rc,
-        .Signal => |sig| @as(u8, 128) + @as(u8, @intCast(@min(sig, 127))),
-        .Stopped, .Unknown => 1,
+        .exited => |rc| rc,
+        .signal => |sig| @as(u8, 128) + @as(u8, @intCast(@min(@intFromEnum(sig), 127))),
+        .stopped, .unknown => 1,
     };
 }
 
 fn parseTestArgs(alloc: Allocator, opts: *Options, line: []const u8) !void {
-    var iter = try std.process.ArgIteratorGeneral(.{}).init(alloc, line);
+    var iter = try std.process.Args.IteratorGeneral(.{}).init(alloc, line);
     defer iter.deinit();
     try cli_args.parse(Options, alloc, opts, &iter);
 }
@@ -632,4 +676,52 @@ test "parseDestination: IPv6 hostname" {
     const stdout = "user alice\nhostname ::1\n";
     const result = parseDestination(arena.allocator(), stdout);
     try testing.expectEqualStrings("alice@::1", result.?);
+}
+
+test "parseDestination: non-default port" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const stdout =
+        \\user alice
+        \\hostname example.com
+        \\port 2222
+        \\
+    ;
+    const result = parseDestination(arena.allocator(), stdout);
+    try testing.expectEqualStrings("alice@example.com:2222", result.?);
+}
+
+test "parseDestination: port before hostname" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const stdout = "port 2222\nuser alice\nhostname example.com\n";
+    const result = parseDestination(arena.allocator(), stdout);
+    try testing.expectEqualStrings("alice@example.com:2222", result.?);
+}
+
+test "parseDestination: IPv6 hostname with non-default port" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const stdout = "user alice\nhostname ::1\nport 2222\n";
+    const result = parseDestination(arena.allocator(), stdout);
+    try testing.expectEqualStrings("alice@[::1]:2222", result.?);
+}
+
+test "parseDestination: result is a valid cache key" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const outputs = [_][]const u8{
+        "user alice\nhostname example.com\nport 22\n",
+        "user alice\nhostname example.com\nport 2222\n",
+        "user alice\nhostname 2001:db8::1\nport 22\n",
+        "user alice\nhostname 2001:db8::1\nport 2222\n",
+    };
+    for (outputs) |stdout| {
+        const result = parseDestination(arena.allocator(), stdout).?;
+        try testing.expect(DiskCache.isValidCacheKey(result));
+    }
 }
