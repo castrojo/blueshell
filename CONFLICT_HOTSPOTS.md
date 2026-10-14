@@ -331,6 +331,17 @@ re-exports.
 **What we added:** `zig-pkg/` to keep the vendored package cache out
 of commits.
 
+## `build.zig.zon` — LOW risk
+
+**What we changed:** `.version` is ours, not upstream's. It must equal
+the `vX.Y.Z` release tag exactly — the build panics on tagged builds
+otherwise. Upstream bumps it on their own cadence (`1.3.2-dev`, …);
+we set it deliberately per BlueShell release (currently `1.3.1`, the
+Ghostty release we match).
+
+**Resolution recipe:** on conflict, keep OUR `.version` line. Never take
+upstream's `-dev` version, or the next tagged Flatpak build aborts.
+(`minimum_zig_version` is upstream's to bump — take theirs.)
 ---
 
 ## Files we DON'T touch (assert this on rebase)

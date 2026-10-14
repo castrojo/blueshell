@@ -1,6 +1,12 @@
 .{
     .name = .ghostty,
-    .version = "1.3.2-dev",
+    // BlueShell release version. This must match the vX.Y.Z release tag
+    // exactly: the build panics on tagged builds otherwise ("tagged
+    // releases must be in vX.Y.Z format matching build.zig"). Upstream
+    // bumps this on their own cadence; on rebase conflicts keep OUR
+    // released version and bump it deliberately per release, never take
+    // upstream's -dev version.
+    .version = "1.3.1",
     .paths = .{""},
     .fingerprint = 0x64407a2a0b4147e5,
     .minimum_zig_version = "0.16.0",
