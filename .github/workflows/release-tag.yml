@@ -8,9 +8,10 @@ on:
         description: "Upload final artifacts to R2"
         default: false
 
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+  # No push trigger: this is upstream Ghostty's macOS pipeline (Sparkle,
+  # notarization, Sentry, R2). BlueShell releases ship through
+  # publish-flatpak.yml on version tags instead; leaving the tag trigger
+  # on would run Apple's signing flow with absent secrets on every release.
 
 name: Release Tag
 
