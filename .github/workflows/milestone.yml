@@ -9,6 +9,10 @@ on:
   pull_request_target:
     types: [closed]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
+
 jobs:
   update-milestone:
     # Ignore bot-authored pull requests (dependabot, app bots, etc)
