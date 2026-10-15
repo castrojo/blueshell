@@ -77,8 +77,20 @@ shoot() { # name window-title-pattern [env for the app run]
             sleep 1
         fi
     fi
-    import -display "$DISPLAY_NUM" -window root "$OUT/$name.png" \
-        || fail "$name: capture failed"
+    # A fixed settle isn't always enough on a cold runner: the first
+    # launch can still be unpainted when we grab it, which yields a tiny
+    # blank PNG. Re-grab (same threshold as the final sanity check)
+    # until the window has painted, rather than failing the whole run.
+    local attempt size
+    for attempt in 1 2 3 4 5; do
+        import -display "$DISPLAY_NUM" -window root "$OUT/$name.png" \
+            || fail "$name: capture failed"
+        size=$(stat -c%s "$OUT/$name.png")
+        [ "$size" -ge 10240 ] && break
+        echo "$name: capture $attempt is only ${size}B, retrying" >&2
+        kill -0 "$app" 2>/dev/null || fail "$name: app exited before painting"
+        sleep 2
+    done
     # Kill the whole session: killing dbus-run-session alone orphans the
     # app, whose window would then sit on top of the next capture.
     pkill -TERM -f "$BIN --gtk-single-instance=false" 2>/dev/null
