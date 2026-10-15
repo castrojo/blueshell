@@ -31,6 +31,10 @@ env:
   # owner before it (GITHUB_TOKEN can only write its own namespace).
   IMAGE: ghcr.io/${{ github.repository_owner }}/blueshell
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-oci:
     name: Build OCI — ${{ matrix.arch }}
