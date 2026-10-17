@@ -134,7 +134,7 @@ pub const Adopt = struct {
         master_fd: Pty.Fd,
     };
 
-    pub fn init(config: Config) Adopt {
+    pub fn init(config: Adopt.Config) Adopt {
         return .{
             .master_fd = config.master_fd,
             .pty = if (comptime builtin.os.tag == .windows) {} else .{
@@ -204,7 +204,6 @@ pub const Adopt = struct {
         if (comptime builtin.os.tag == .windows) return null;
         return self.pty.getProcessInfo(info);
     }
-
 };
 
 /// Termio thread data. See termio.ThreadData for docs.
