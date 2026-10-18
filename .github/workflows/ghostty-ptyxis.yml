@@ -1,4 +1,4 @@
-name: BlueShell Flatpak
+name: Blueshell Flatpak
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: BlueShell.flatpak
-          manifest-path: flatpak/org.tunaos.BlueShell.yml
+          bundle: blueshell.flatpak
+          manifest-path: flatpak/org.tunaos.blueshell.yml
           cache-key: flatpak-builder-${{ github.sha }}
           upload-artifact: true

@@ -1,6 +1,6 @@
 /* blueshell-vm-providers.h
  *
- * BlueShell addition: VM/cluster spawn targets (Lima, LibVirt, Incus,
+ * Blueshell addition: VM/cluster spawn targets (Lima, LibVirt, Incus,
  * Kubernetes, KubeVirt). See blueshell-vm-providers.c for design notes.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later

@@ -1,4 +1,4 @@
-# BlueShell Roadmap
+# Blueshell Roadmap
 
 **Last updated**: 2026-09-02 | **Status**: Shipping to the TunaOS Flatpak remote, unversioned
 
@@ -13,7 +13,7 @@ Feature scope lives in the [README](README.md); the fork strategy lives in
 build and test practice lives in [HACKING.md](HACKING.md) and [TESTING.md](TESTING.md).
 
 What none of those carry is the **maturity contract** — what has to be
-demonstrably true before BlueShell is something the org tells people to depend
+demonstrably true before Blueshell is something the org tells people to depend
 on, given that it is already installable from the org's remote. That is this
 file.
 
@@ -27,7 +27,7 @@ that decision was made.
 
 | | |
 |---|---|
-| Distribution | `org.tunaos.BlueShell` in the TunaOS Flatpak remote since 2026-08-27, `latest` tag, amd64 + arm64 |
+| Distribution | `org.tunaos.blueshell` in the TunaOS Flatpak remote since 2026-08-27, `latest` tag, amd64 + arm64 |
 | Versioning | None — 0 tags, 0 releases, 0 milestones ([#59](https://github.com/tuna-os/blueshell/issues/59)) |
 | Upstream freshness | No upstream Ghostty commit newer than 2026-06-03 ([#57](https://github.com/tuna-os/blueshell/issues/57)) |
 | Upstream sync automation | 13 scheduled runs, 13 failures, no successful run ([#57](https://github.com/tuna-os/blueshell/issues/57)) |
@@ -38,7 +38,7 @@ that decision was made.
 ## Gate 1 — the fork sustains itself
 
 Nothing below this gate is a feature. It is the set of properties that decide
-whether BlueShell is a maintained fork or a snapshot, and it is the highest
+whether Blueshell is a maintained fork or a snapshot, and it is the highest
 priority work in the repository.
 
 | Gate | Required evidence |
@@ -88,7 +88,7 @@ belongs in `CONFLICT_HOTSPOTS.md` next to the recipe.
 
 Sibling direction: [#23](https://github.com/tuna-os/blueshell/issues/23) asks
 `tuna-os/corral` for machine-readable `corral list --json`, which is the
-container-integration seam BlueShell owns end to end within the org.
+container-integration seam Blueshell owns end to end within the org.
 
 ## Deliberately not now
 

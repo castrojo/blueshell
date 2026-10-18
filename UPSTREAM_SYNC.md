@@ -1,6 +1,6 @@
 # Staying in sync with upstream Ghostty
 
-BlueShell is a patch-set on top of `ghostty-org/ghostty`. The whole
+Blueshell is a patch-set on top of `ghostty-org/ghostty`. The whole
 strategy is built around one goal: **keep the downstream diff small,
 mechanical to re-apply, and loudly alarmed** so weekly rebases stay a
 15-minute chore instead of a rescue mission.
@@ -84,11 +84,11 @@ Tracking upstream **releases** instead of `main` is a deliberate
 non-goal while the fork iterates quickly; if that changes, point the
 workflow's `fetch upstream main` at the release tag instead.
 
-## Publishing upstream Ghostty alongside BlueShell
+## Publishing upstream Ghostty alongside Blueshell
 
 `.github/workflows/publish-ghostty-flatpak.yml` builds **pinned
 upstream Ghostty** (`com.mitchellh.ghostty`) and publishes it to the same
-TunaOS Flatpak remote as BlueShell, so a user can install either terminal
+TunaOS Flatpak remote as Blueshell, so a user can install either terminal
 — or both, since the app IDs differ — from one remote:
 
 ```sh

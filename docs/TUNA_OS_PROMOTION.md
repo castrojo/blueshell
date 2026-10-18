@@ -1,6 +1,6 @@
-# Promoting BlueShell to the tuna-os org + Flatpak remote
+# Promoting Blueshell to the tuna-os org + Flatpak remote
 
-Goal: ship BlueShell (now at `tuna-os/blueshell` — **transfer done
+Goal: ship Blueshell (now at `tuna-os/blueshell` — **transfer done
 2026-08-17**) through the TunaOS Flatpak remote (`https://tunaos.org/flatpak/`,
 OCI images on `ghcr.io/tuna-os/*`, index maintained in `tuna-os/docs`
 and served via Cloudflare Pages).
@@ -29,27 +29,27 @@ After transfer, in the new repo:
 - Update the repo description/topics; keep the `upstream-sync` label
   (the weekly sync workflow creates issues with it).
 
-## 2. Rename the app ID: `dev.hanthor.BlueShell` → `org.tunaos.BlueShell` — ✅ DONE
+## 2. Rename the app ID: `dev.hanthor.blueshell` → `org.tunaos.blueshell` — ✅ DONE
 
 TunaOS convention is `org.tunaos.<App>`. One PR, mechanical:
 
 | File | Change |
 | --- | --- |
-| `flatpak/org.tunaos.BlueShell.yml` | renamed file, `app-id:` field |
-| `flatpak/org.tunaos.BlueShell.desktop` | renamed file; updated `Icon=` and `StartupWMClass=` |
-| `flatpak/org.tunaos.BlueShell.svg` | renamed file (manifest install path follows app ID) |
+| `flatpak/org.tunaos.blueshell.yml` | renamed file, `app-id:` field |
+| `flatpak/org.tunaos.blueshell.desktop` | renamed file; updated `Icon=` and `StartupWMClass=` |
+| `flatpak/org.tunaos.blueshell.svg` | renamed file (manifest install path follows app ID) |
 | `.github/workflows/ghostty-ptyxis.yml` | `manifest-path`, bundle name |
 | `.github/workflows/publish-flatpak.yml` | `APP_ID` env at the top |
 | `README.md`, `HACKING.md` | install commands, App ID mention |
 
 Notes:
 
-- **Icon: done.** `flatpak/org.tunaos.BlueShell.svg` is original
-  BlueShell artwork (blue scallop + terminal prompt), installed by the
+- **Icon: done.** `flatpak/org.tunaos.blueshell.svg` is original
+  Blueshell artwork (blue scallop + terminal prompt), installed by the
   manifest under the app ID; `rename-icon` was dropped so Ghostty's
   unlicensed icon is no longer shipped. Rename the SVG alongside the
   app-id flip. `rename-appdata-file` still reuses upstream's metainfo —
-  replace with a BlueShell metainfo file before Flathub-style listing
+  replace with a Blueshell metainfo file before Flathub-style listing
   polish matters.
 - Keep `--own-name=com.mitchellh.ghostty` in `finish-args` for now: the
   GTK application still registers on D-Bus under upstream's id
@@ -58,10 +58,10 @@ Notes:
   the app ID in the fork and add a `CONFLICT_HOTSPOTS.md` entry.
 - Internal GObject class names (`GhosttyPtyxis*` in
   `src/apprt/gtk/class/` and their blueprint templates) are not
-  user-facing and can be renamed to `BlueShell*` in a follow-up
+  user-facing and can be renamed to `Blueshell*` in a follow-up
   mechanical PR — not a blocker.
 - Users of the old `dev.hanthor` install must
-  `flatpak uninstall dev.hanthor.BlueShell` once; app IDs have no
+  `flatpak uninstall dev.hanthor.blueshell` once; app IDs have no
   migration path.
 
 ## 3. Register in the TunaOS Flatpak remote
@@ -70,9 +70,9 @@ Per `tuna-os/flatpak-index` ("adding apps" flow):
 
 1. Repo lives under `tuna-os/` — done by step 1.
 2. Manifest at the expected path/name for the index tooling
-   (`org.tunaos.BlueShell` — step 2). If the index tooling requires
+   (`org.tunaos.blueshell` — step 2). If the index tooling requires
    the manifest at repo root, add a thin root-level manifest that
-   `base`s or mirrors `flatpak/org.tunaos.BlueShell.yml` rather
+   `base`s or mirrors `flatpak/org.tunaos.blueshell.yml` rather
    than duplicating it.
 3. CI workflow `publish-flatpak.yml` — already committed here, copied
    from `tuna-os/finupdate` (the canonical tuna-os pipeline): native
@@ -89,10 +89,10 @@ Users then get it with:
 
 ```sh
 flatpak remote-add --if-not-exists tuna-os https://tunaos.org/flatpak/tuna-os.flatpakrepo
-flatpak install tuna-os org.tunaos.BlueShell
+flatpak install tuna-os org.tunaos.blueshell
 ```
 
-Status: ✅ live. `app/org.tunaos.BlueShell/{x86_64,aarch64}/master` is in
+Status: ✅ live. `app/org.tunaos.blueshell/{x86_64,aarch64}/master` is in
 `tuna-os/docs:static/flatpak/index/static` and every push to `ptyxis-port`
 refreshes it.
 
@@ -103,7 +103,7 @@ The remote also carries pinned upstream Ghostty
 `.github/workflows/publish-ghostty-flatpak.yml`. That file is trigger
 policy only — the body is the same reusable
 `tuna-os/.github/.github/workflows/publish-flatpak.yml` every other
-tuna-os app calls. Three things differ from BlueShell's own publish:
+tuna-os app calls. Three things differ from Blueshell's own publish:
 
 - It builds a pinned upstream commit (a `type: git` source in the
   repo-owned `flatpak/com.mitchellh.ghostty.yml`) with upstream's build
@@ -173,7 +173,7 @@ Being installable is not the finish line — the app must be discoverable:
 
 - [x] `ptyxis-tests` and `ghostty-ptyxis` (bundle) workflows green in the org repo
 - [x] `publish-flatpak` run pushed an image to `ghcr.io/tuna-os/blueshell` and the index commit landed in `tuna-os/docs`
-- [x] BlueShell present in the remote index as `app/org.tunaos.BlueShell/{x86_64,aarch64}/master`
+- [x] Blueshell present in the remote index as `app/org.tunaos.blueshell/{x86_64,aarch64}/master`
 - [x] README install section switched to the remote as the primary path (the rolling `tip` release is the "bleeding edge" alternative)
 - [x] `upstream-sync.yml` failure fixed — the `upstream-sync` label does not survive a repo transfer, and every weekly run since 2026-08-17 failed at `gh issue create --label upstream-sync`. Label recreated 2026-09-06.
 - [x] Ghostty: first `publish-ghostty-flatpak` run green (2026-09-06), index entry `app/com.mitchellh.ghostty/{x86_64,aarch64}/master` live. The GHCR package came out **public** on first push, so the manual visibility flip this document warned about was not needed — worth re-checking rather than assuming for the next app.

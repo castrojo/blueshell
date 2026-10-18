@@ -1227,10 +1227,10 @@ command: ?Command = null,
 /// Available since 1.3.0.
 @"notify-on-command-finish": NotifyOnCommandFinish = .never,
 
-/// AI agent CLIs to detect in terminal tabs (BlueShell, RFC #22).
+/// AI agent CLIs to detect in terminal tabs (Blueshell, RFC #22).
 ///
 /// When a listed process (e.g. `claude`, `codex`, `aider`, `goose`) is in
-/// the foreground of a tab's terminal, BlueShell tracks the agent's state
+/// the foreground of a tab's terminal, Blueshell tracks the agent's state
 /// — idle, working, blocked on a question, or done — and shows it as an
 /// indicator icon on the tab, with a needs-attention pulse when the agent
 /// is blocked or finished. The tab overview then doubles as an agent

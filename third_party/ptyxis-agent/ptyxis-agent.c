@@ -160,7 +160,7 @@ ptyxis_agent_init (PtyxisAgent  *agent,
 
   ptyxis_agent_impl_add_provider (agent->impl, podman);
 
-  /* BlueShell: opt-in VM/cluster spawn targets (lima, libvirt, incus,
+  /* Blueshell: opt-in VM/cluster spawn targets (lima, libvirt, incus,
    * kubernetes, kubevirt) via BLUESHELL_VM_PROVIDERS. */
   {
     g_autoptr(GPtrArray) vm_containers =

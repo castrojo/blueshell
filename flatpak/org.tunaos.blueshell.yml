@@ -1,11 +1,11 @@
-app-id: org.tunaos.BlueShell
+app-id: org.tunaos.blueshell
 runtime: org.gnome.Platform
 runtime-version: "50"
 sdk: org.gnome.Sdk
 default-branch: master
 command: ghostty
 
-# BlueShell ships its own metainfo and artwork. Renaming Ghostty's metainfo
+# Blueshell ships its own metainfo and artwork. Renaming Ghostty's metainfo
 # would leave Ghostty's name, description, and icon in software stores.
 
 finish-args:
@@ -75,20 +75,20 @@ modules:
         --search-prefix /app
         --system $PWD/vendor/p
       # Install our custom desktop file (overrides the upstream one).
-      - install -Dm644 flatpak/org.tunaos.BlueShell.desktop
-          /app/share/applications/org.tunaos.BlueShell.desktop
-      - install -Dm644 flatpak/org.tunaos.BlueShell.metainfo.xml
-          /app/share/metainfo/org.tunaos.BlueShell.metainfo.xml
-      # Install the BlueShell icon (original artwork; Ghostty's icon is
+      - install -Dm644 flatpak/org.tunaos.blueshell.desktop
+          /app/share/applications/org.tunaos.blueshell.desktop
+      - install -Dm644 flatpak/org.tunaos.blueshell.metainfo.xml
+          /app/share/metainfo/org.tunaos.blueshell.metainfo.xml
+      # Install the Blueshell icon (original artwork; Ghostty's icon is
       # unlicensed to us). Upstream's com.mitchellh.ghostty icons stay
       # installed but are not exported (flatpak exports only app-id-named
       # icons).
-      - install -Dm644 flatpak/org.tunaos.BlueShell.svg
-          /app/share/icons/hicolor/scalable/apps/org.tunaos.BlueShell.svg
-      - install -Dm644 flatpak/org.tunaos.BlueShell-64.png
-          /app/share/icons/hicolor/64x64/apps/org.tunaos.BlueShell.png
-      - install -Dm644 flatpak/org.tunaos.BlueShell-128.png
-          /app/share/icons/hicolor/128x128/apps/org.tunaos.BlueShell.png
+      - install -Dm644 flatpak/org.tunaos.blueshell.svg
+          /app/share/icons/hicolor/scalable/apps/org.tunaos.blueshell.svg
+      - install -Dm644 flatpak/org.tunaos.blueshell-64.png
+          /app/share/icons/hicolor/64x64/apps/org.tunaos.blueshell.png
+      - install -Dm644 flatpak/org.tunaos.blueshell-128.png
+          /app/share/icons/hicolor/128x128/apps/org.tunaos.blueshell.png
     sources:
       - type: dir
         path: ..

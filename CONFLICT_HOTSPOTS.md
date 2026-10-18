@@ -304,7 +304,7 @@ instead. After any rebase, grep fork-owned files for
 `os/env.zig` imports. (Also: 0.16 `zig fmt` rejects a trailing `;`
 after an if/else statement.)
 
-**Upstreaming:** a sandbox-aware resource dir is not BlueShell-specific
+**Upstreaming:** a sandbox-aware resource dir is not Blueshell-specific
 — Ghostty's own Flatpak build has the same problem. Worth an upstream
 issue.
 
@@ -352,7 +352,7 @@ of commits.
 **What we changed:** `.version` is ours, not upstream's. It must equal
 the `vX.Y.Z` release tag exactly — the build panics on tagged builds
 otherwise. Upstream bumps it on their own cadence (`1.3.2-dev`, …);
-we set it deliberately per BlueShell release (currently `1.3.1`, the
+we set it deliberately per Blueshell release (currently `1.3.1`, the
 Ghostty release we match).
 
 **Resolution recipe:** on conflict, keep OUR `.version` line. Never take

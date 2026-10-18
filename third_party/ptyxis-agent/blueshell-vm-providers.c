@@ -1,6 +1,6 @@
 /* blueshell-vm-providers.c
  *
- * BlueShell addition: VM and cluster spawn targets on top of the Ptyxis
+ * Blueshell addition: VM and cluster spawn targets on top of the Ptyxis
  * agent's container model — Lima, LibVirt, Incus, Kubernetes, and
  * KubeVirt. Each running instance becomes a PtyxisSessionContainer whose
  * command prefix routes the spawned shell into the target:

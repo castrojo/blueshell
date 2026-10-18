@@ -1,8 +1,8 @@
 name: Publish Flatpak
 
-# Build BlueShell as a Flatpak OCI image for x86_64 and aarch64, push both
+# Build Blueshell as a Flatpak OCI image for x86_64 and aarch64, push both
 # to GHCR, and update the TunaOS Flatpak index (tunaos.org/flatpak) so
-# `flatpak install tuna-os org.tunaos.BlueShell` serves current builds.
+# `flatpak install tuna-os org.tunaos.blueshell` serves current builds.
 # It also exports the built /app tree as a per-arch tarball: FlatPark only
 # accepts tar/zip/deb/AppImage release downloads (not .flatpak bundles),
 # and the tarball is exactly what the bundle and OCI image ship.
@@ -28,8 +28,8 @@ permissions:
   packages: write
 
 env:
-  APP_ID: org.tunaos.BlueShell
-  MANIFEST: flatpak/org.tunaos.BlueShell.yml
+  APP_ID: org.tunaos.blueshell
+  MANIFEST: flatpak/org.tunaos.blueshell.yml
   # ghcr.io/<owner>/blueshell — tuna-os after the transfer, the fork
   # owner before it (GITHUB_TOKEN can only write its own namespace).
   IMAGE: ghcr.io/${{ github.repository_owner }}/blueshell
@@ -253,7 +253,7 @@ jobs:
 
           \`\`\`sh
           flatpak remote-add --if-not-exists tuna-os https://tunaos.org/flatpak/tuna-os.flatpakrepo
-          flatpak install tuna-os org.tunaos.BlueShell
+          flatpak install tuna-os org.tunaos.blueshell
           \`\`\`
           "
 

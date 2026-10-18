@@ -1,14 +1,14 @@
 name: Publish Ghostty Flatpak
 
 # Republish stock upstream Ghostty (com.mitchellh.ghostty) onto the TunaOS
-# Flatpak remote, alongside BlueShell. The app is built from a pinned
+# Flatpak remote, alongside Blueshell. The app is built from a pinned
 # upstream commit (see `commit:` in flatpak/com.mitchellh.ghostty.yml)
 # with one TunaOS addition: a launcher wrapper that passes the host's
 # ~/.config/ghostty as optional config files, because Flatpak redirects
 # XDG_CONFIG_HOME into the sandbox and the host config would otherwise
 # never be read (tuna-os/blueshell#117). No patches to upstream's source.
 #
-# Because the app IDs differ (com.mitchellh.ghostty vs org.tunaos.BlueShell),
+# Because the app IDs differ (com.mitchellh.ghostty vs org.tunaos.blueshell),
 # a user can install both side by side from the one remote.
 #
 # This lives in blueshell rather than in a tuna-os/ghostty fork because a
@@ -83,6 +83,6 @@ jobs:
       # upstream main from 2026-09-13, which Utah's e2e passed with.)
       publish: ${{ github.event_name != 'pull_request' }}
       # No bundles on the GitHub release: these are upstream's builds, and
-      # this repo's releases are BlueShell's.
+      # this repo's releases are Blueshell's.
       attach-bundles: false
     secrets: inherit

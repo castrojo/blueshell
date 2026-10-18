@@ -62,7 +62,7 @@ executable('ptyxis-agent', ptyxis_agent_sources,
                c_args: ptyxis_agent_c_args,
 )
 
-# BlueShell: unit test for the VM providers' enumeration/parsing. Uses
+# Blueshell: unit test for the VM providers' enumeration/parsing. Uses
 # fake CLI shims on PATH (see test-vm-providers.c), so it runs anywhere.
 test_vm_providers = executable('test-vm-providers',
   [ptyxis_agent_ipc, files([

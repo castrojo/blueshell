@@ -1,6 +1,6 @@
 .{
     .name = .ghostty,
-    // BlueShell release version. This must match the vX.Y.Z release tag
+    // Blueshell release version. This must match the vX.Y.Z release tag
     // exactly: the build panics on tagged builds otherwise ("tagged
     // releases must be in vX.Y.Z format matching build.zig"). Upstream
     // bumps this on their own cadence; on rebase conflicts keep OUR

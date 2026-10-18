@@ -1,6 +1,6 @@
-# Developing BlueShell
+# Developing Blueshell
 
-This document covers building and hacking on **BlueShell** (the `ptyxis-port` branch). The second half of this file is the upstream Ghostty developer guide, which applies equally here for anything not covered in the BlueShell section.
+This document covers building and hacking on **Blueshell** (the `ptyxis-port` branch). The second half of this file is the upstream Ghostty developer guide, which applies equally here for anything not covered in the Blueshell section.
 
 <!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
 ## Contribute compute — no code needed
@@ -17,7 +17,7 @@ Never post account credentials or API keys in issues or pull requests.
 
 ## Quick start (Fedora / Silverblue)
 
-BlueShell builds inside a Fedora 43 toolbox. The host needs Zig 0.15.x on PATH.
+Blueshell builds inside a Fedora 43 toolbox. The host needs Zig 0.15.x on PATH.
 
 ```sh
 # One-time: create the build toolbox
@@ -80,7 +80,7 @@ The GTK app auto-resolves it from `PTYXIS_AGENT`, `/app/libexec/ptyxis-agent`, o
 ## Flatpak build
 
 ```sh
-flatpak-builder --install --user build-dir flatpak/dev.hanthor.BlueShell.yml
+flatpak-builder --install --user build-dir flatpak/org.tunaos.blueshell.yml
 ```
 
 The manifest bundles ptyxis-agent at `/app/libexec/ptyxis-agent`.

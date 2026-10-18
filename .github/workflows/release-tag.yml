@@ -9,7 +9,7 @@ on:
         default: false
 
   # No push trigger: this is upstream Ghostty's macOS pipeline (Sparkle,
-  # notarization, Sentry, R2). BlueShell releases ship through
+  # notarization, Sentry, R2). Blueshell releases ship through
   # publish-flatpak.yml on version tags instead; leaving the tag trigger
   # on would run Apple's signing flow with absent secrets on every release.
 

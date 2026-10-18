@@ -366,7 +366,7 @@ fn drainMailbox(
                 );
             },
 
-            // BlueShell: bytes injected into the terminal stream parser
+            // Blueshell: bytes injected into the terminal stream parser
             // (never written to the child). processOutput takes the
             // renderer lock itself.
             .inject_output => |v| {
