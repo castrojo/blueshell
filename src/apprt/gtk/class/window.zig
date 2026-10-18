@@ -462,7 +462,7 @@ pub const Window = extern struct {
         const prefs_section = gio.Menu.new();
         defer _ = gobject.Object.unref(prefs_section.as(gobject.Object));
         prefs_section.append("_Preferences", "app.preferences");
-        prefs_section.append("_About Ghostty", "win.about");
+        prefs_section.append("_About blueshell", "win.about");
         menu.appendSection(null, prefs_section.as(gio.MenuModel));
 
         // Set the menu on both buttons (popover is created lazily on first
