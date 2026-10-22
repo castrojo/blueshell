@@ -1921,7 +1921,7 @@ pub const Application = extern struct {
         const s_variant_type = glib.ext.VariantType.newFor([:0]const u8);
         defer s_variant_type.free();
 
-        const actions = [_]ext.actions.Action(Self){
+        const action_map = [_]ext.actions.Action(Self){
             .init("new-window", actionNewWindow, null),
             .init("new-window-command", actionNewWindow, as_variant_type),
             .init("new-tab", actionNewTab, tas_variant_type),
@@ -1934,7 +1934,7 @@ pub const Application = extern struct {
             .init("ring-bell", actionRingBell, null),
         };
 
-        ext.actions.add(Self, self, &actions);
+        ext.actions.add(Self, self, &action_map);
     }
 
     /// Setup our global shortcuts.
